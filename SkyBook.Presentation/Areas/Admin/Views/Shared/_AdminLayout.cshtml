@@ -1,0 +1,524 @@
+@using Microsoft.AspNetCore.Identity
+@using SkyBook.Data.Models
+@inject UserManager<ApplicationUser> UserManager
+@{
+    Layout = null;
+    var appUser = await UserManager.GetUserAsync(User);
+    var adminName = appUser?.FullName;
+    if (string.IsNullOrWhiteSpace(adminName))
+    {
+        adminName = appUser?.UserName ?? User.Identity?.Name ?? "Administrator";
+    }
+    var adminEmail = appUser?.Email ?? User.Identity?.Name ?? "admin@skybook.com";
+    var adminImage = appUser?.ImageUrl ?? "";
+    var adminInitials = "SB";
+    if (!string.IsNullOrWhiteSpace(adminName))
+    {
+        var parts = adminName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length > 1)
+        {
+            adminInitials = $"{parts[0][0]}{parts[1][0]}".ToUpper();
+        }
+        else if (parts.Length == 1 && parts[0].Length > 0)
+        {
+            adminInitials = parts[0].Substring(0, Math.Min(2, parts[0].Length)).ToUpper();
+        }
+    }
+}
+<!DOCTYPE html>
+<html class="h-full bg-slate-100" lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>@ViewData["Title"] - SkyBook Operations Console</title>
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=Space+Grotesk:wght@@500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+          mono: ['"Space Grotesk"', 'monospace'],
+        },
+        colors: {
+          midnight: { 900: '#070F1C', 800: '#0B192C', 700: '#142740', 600: '#1E3A5F' },
+          champagne: { 100: '#F9F5EE', 200: '#F1E9DA', 300: '#E2D3B8', 400: '#D4BD95', 500: '#C5A880', 600: '#AF8E62', 700: '#8A6E47' },
+          emerald: { 500: '#10B981', 600: '#059669' },
+          amber: { 500: '#F59E0B' },
+          rose: { 500: '#F43F5E', 600: '#E11D48' }
+        }
+      }
+    }
+  }
+</script>
+<style data-purpose="scrollbar-and-general">
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+    .custom-scroll-dark::-webkit-scrollbar-thumb { background: #1E3A5F; }
+  </style>
+<style data-purpose="view-transitions">
+    .view-container { display: none; animation: fadeIn 0.18s ease-in-out forwards; }
+    .view-container.active { display: block; }
+    @@keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .drawer-backdrop { transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+    .drawer-content { transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+  </style>
+<style data-purpose="sidebar-collapse-fix">
+  #main-sidebar.sidebar-collapsed .nav-item { justify-content: center; }
+  #main-sidebar.sidebar-collapsed #brand-container { justify-content: center; width: 100%; }
+  #main-sidebar.sidebar-collapsed #sidebar-user-card { justify-content: center; }
+  #main-sidebar.sidebar-collapsed #sidebar-toggle-btn { margin-left: auto; margin-right: auto; }
+</style>
+<link rel="stylesheet" href="~/css/site-mobile.css" />
+@RenderSection("Styles", required: false)
+</head>
+<body class="h-full overflow-hidden font-sans text-slate-800 antialiased bg-[#F4F6F9] selection:bg-champagne-500 selection:text-white">
+<div class="fixed bottom-6 right-6 z-[80] flex flex-col gap-2 pointer-events-none" id="toast-container"></div>
+<div class="flex h-screen w-screen overflow-hidden">
+@await Html.PartialAsync("_AdminSidebar")
+<div class="flex-1 flex flex-col h-screen overflow-hidden">
+  @RenderBody()
+</div>
+</div>
+
+<!-- Admin Profile Drawer -->
+<div class="fixed inset-0 z-50 overflow-hidden hidden" id="drawer-admin-profile">
+  <div class="absolute inset-0 bg-midnight-900/50 backdrop-blur-sm" onclick="closeDrawer('drawer-admin-profile')"></div>
+  <div class="absolute inset-y-0 right-0 max-w-md w-full bg-white shadow-2xl border-l-2 border-[#C5A880] flex flex-col">
+    <div class="bg-midnight-800 px-5 py-4 flex items-center justify-between text-white flex-shrink-0">
+      <div>
+        <p class="text-[10px] font-bold uppercase tracking-widest text-champagne-400">Administrator</p>
+        <h2 class="text-base font-extrabold">Admin Profile</h2>
+      </div>
+      <button type="button" onclick="closeDrawer('drawer-admin-profile')" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center">✕</button>
+    </div>
+    <div class="flex-1 overflow-y-auto p-5 space-y-5 bg-slate-50/50">
+      <div class="flex items-center gap-4 bg-white rounded-xl border border-slate-200 p-4">
+        <div class="w-14 h-14 rounded-full overflow-hidden bg-midnight-800 text-champagne-300 font-bold text-lg flex items-center justify-center border-2 border-champagne-400/40">
+          @if (!string.IsNullOrEmpty(adminImage))
+          {
+            <img src="@adminImage" alt="@adminName" class="w-full h-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+            <span style="display:none;" class="w-full h-full flex items-center justify-center">@adminInitials</span>
+          }
+          else
+          {
+            <span>@adminInitials</span>
+          }
+        </div>
+        <div>
+          <p class="text-base font-extrabold text-midnight-900">@adminName</p>
+          <p class="text-xs text-champagne-700 font-semibold">Chief Flight Dispatcher</p>
+          <p class="text-[11px] text-emerald-600 font-medium mt-0.5">● Active · Admin</p>
+        </div>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-3 text-sm">
+        <div class="flex justify-between"><span class="text-slate-500">Email</span><span class="font-semibold text-midnight-900">@adminEmail</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">Role</span><span class="font-bold text-champagne-700">ADMIN</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">Department</span><span class="font-semibold text-midnight-900">Flight Operations</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">Base</span><span class="font-semibold text-midnight-900">DXB Hub</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">Employee ID</span><span class="font-mono font-semibold text-midnight-900">SB-OPS-0042</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">Access level</span><span class="font-semibold text-midnight-900">Full console</span></div>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-2 text-sm">
+        <p class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">Session</p>
+        <div class="flex justify-between"><span class="text-slate-500">Status</span><span class="font-semibold text-emerald-600">Online</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">Last login</span><span class="font-semibold text-midnight-900">Today · Ops desk</span></div>
+      </div>
+      <button type="button" onclick="handleLogout()" class="w-full py-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition">Sign Out</button>
+    </div>
+  </div>
+</div>
+
+<!-- Universal Confirm Action Modal (Cancel / Delete) -->
+<div class="fixed inset-0 z-[60] flex items-center justify-center hidden" id="modal-confirm-cancel">
+  <div class="absolute inset-0 bg-midnight-900/60 backdrop-blur-sm" onclick="closeModal('modal-confirm-cancel')"></div>
+  <div class="relative bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden border border-slate-200 z-10">
+    <div class="bg-midnight-800 px-6 py-4 flex items-center gap-3">
+      <div class="w-10 h-10 rounded-lg bg-rose-500/20 border border-rose-400/40 flex items-center justify-center text-rose-400">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+      </div>
+      <div>
+        <p class="text-[10px] font-bold uppercase tracking-widest text-rose-400">Confirmation</p>
+        <h3 class="text-sm font-bold text-white" id="cancel-modal-title">Confirm Action?</h3>
+      </div>
+    </div>
+    <div class="p-6 space-y-4">
+      <p class="text-sm text-slate-600 leading-relaxed" id="cancel-modal-desc">Are you sure you want to perform this action? This operation will update the system dispatch ledger.</p>
+      <div class="flex items-center gap-2 pt-2">
+        <button type="button" class="flex-1 py-2.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition" onclick="closeModal('modal-confirm-cancel')">Keep Active</button>
+        <button type="button" class="flex-1 py-2.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition" id="cancel-modal-confirm-btn" onclick="typeof executeCancellation === 'function' ? executeCancellation() : closeModal('modal-confirm-cancel')">Confirm</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Universal In-Website Confirmation Modal (Replaces native browser confirm) -->
+<div class="fixed inset-0 z-[70] flex items-center justify-center hidden" id="modal-website-confirm">
+  <div class="absolute inset-0 bg-midnight-950/70 backdrop-blur-sm transition-opacity" onclick="closeWebsiteConfirm(false)"></div>
+  <div class="relative bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden border border-slate-200 z-10 animate-scale">
+    <div class="bg-midnight-900 px-6 py-4 flex items-center justify-between border-b border-midnight-800">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl flex items-center justify-center transition-colors" id="website-confirm-icon-box">
+          <span id="website-confirm-icon-svg"></span>
+        </div>
+        <div>
+          <p class="text-[10px] font-bold uppercase tracking-widest text-champagne-400" id="website-confirm-category">Sovereign Management</p>
+          <h3 class="text-sm font-bold text-white" id="website-confirm-title">Confirm Operation</h3>
+        </div>
+      </div>
+      <button type="button" class="text-slate-400 hover:text-white p-1 transition" onclick="closeWebsiteConfirm(false)">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="p-6 space-y-5">
+      <div class="text-sm text-slate-600 leading-relaxed" id="website-confirm-message">
+        Are you sure you want to proceed with this operation?
+      </div>
+      <div class="flex items-center gap-3 pt-2">
+        <button type="button" class="flex-1 py-2.5 px-4 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition" id="website-confirm-cancel-btn" onclick="closeWebsiteConfirm(false)">
+          Cancel
+        </button>
+        <button type="button" class="flex-1 py-2.5 px-4 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-md transition" id="website-confirm-action-btn" onclick="closeWebsiteConfirm(true)">
+          Confirm Delete
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Universal In-Website Action Alert / Feedback Popup Modal (For Edits and Updates) -->
+<div class="fixed inset-0 z-[70] flex items-center justify-center hidden" id="modal-website-alert">
+  <div class="absolute inset-0 bg-midnight-950/60 backdrop-blur-xs transition-opacity" onclick="closeModal('modal-website-alert')"></div>
+  <div class="relative bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-4 overflow-hidden border border-slate-200 z-10 animate-scale text-center p-6 space-y-4">
+    <div class="w-14 h-14 mx-auto rounded-2xl flex items-center justify-center shadow-inner" id="website-alert-icon-box">
+      <span id="website-alert-icon-svg"></span>
+    </div>
+    <div>
+      <h3 class="text-base font-bold text-midnight-900" id="website-alert-title">Changes Saved</h3>
+      <p class="text-xs text-slate-500 mt-1.5 leading-relaxed" id="website-alert-message">Your updates have been securely synchronized with the sovereign database ledger.</p>
+    </div>
+    <div class="pt-2">
+      <button type="button" class="w-full py-2.5 px-4 text-xs font-bold text-white bg-midnight-900 hover:bg-midnight-800 rounded-xl shadow-md transition" onclick="closeModal('modal-website-alert')">
+        Continue
+      </button>
+    </div>
+  </div>
+</div>
+
+@await Html.PartialAsync("_AdminModals")
+
+<script>
+  // Synchronize authenticated admin credentials
+  localStorage.setItem('skybook-authenticated', 'true');
+  localStorage.setItem('skybook-role', 'admin');
+  localStorage.setItem('skybook-user-name', '@adminName');
+  localStorage.setItem('skybook-user-email', '@adminEmail');
+  localStorage.setItem('skybook-user-initials', '@adminInitials');
+  @if (!string.IsNullOrEmpty(adminImage))
+  {
+    <text>localStorage.setItem('skybook-user-avatar', '@adminImage');</text>
+  }
+
+  function openModal(id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('hidden');
+  }
+
+  function closeModal(id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('hidden');
+  }
+
+  // Universal In-Website Confirmation Modal (Replaces native browser confirm)
+  let _websiteConfirmCallback = null;
+  let _websiteCancelCallback = null;
+
+  function showWebsiteConfirm(options) {
+    const {
+      title = 'Confirm Operation',
+      category = 'Sovereign Management',
+      message = 'Are you sure you want to proceed?',
+      confirmText = 'Confirm',
+      cancelText = 'Cancel',
+      type = 'danger',
+      onConfirm = null,
+      onCancel = null
+    } = options || {};
+
+    _websiteConfirmCallback = onConfirm;
+    _websiteCancelCallback = onCancel;
+
+    const titleEl = document.getElementById('website-confirm-title');
+    const catEl = document.getElementById('website-confirm-category');
+    const msgEl = document.getElementById('website-confirm-message');
+    const confirmBtn = document.getElementById('website-confirm-action-btn');
+    const cancelBtn = document.getElementById('website-confirm-cancel-btn');
+    const iconBox = document.getElementById('website-confirm-icon-box');
+    const iconSvg = document.getElementById('website-confirm-icon-svg');
+
+    if (titleEl) titleEl.innerText = title;
+    if (catEl) catEl.innerText = category;
+    if (msgEl) msgEl.innerHTML = message;
+    if (confirmBtn) confirmBtn.innerText = confirmText;
+    if (cancelBtn) cancelBtn.innerText = cancelText;
+
+    if (iconBox && iconSvg) {
+      if (type === 'danger') {
+        iconBox.className = 'w-10 h-10 rounded-xl bg-rose-500/20 border border-rose-400/40 flex items-center justify-center text-rose-400';
+        iconSvg.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>';
+        if (confirmBtn) confirmBtn.className = 'flex-1 py-2.5 px-4 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-md transition';
+      } else if (type === 'warning') {
+        iconBox.className = 'w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-400';
+        iconSvg.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>';
+        if (confirmBtn) confirmBtn.className = 'flex-1 py-2.5 px-4 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl shadow-md transition';
+      } else {
+        iconBox.className = 'w-10 h-10 rounded-xl bg-champagne-500/20 border border-champagne-400/40 flex items-center justify-center text-champagne-400';
+        iconSvg.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>';
+        if (confirmBtn) confirmBtn.className = 'flex-1 py-2.5 px-4 text-xs font-bold text-white bg-midnight-900 hover:bg-midnight-800 rounded-xl shadow-md transition';
+      }
+    }
+
+    openModal('modal-website-confirm');
+  }
+
+  function closeWebsiteConfirm(confirmed) {
+    closeModal('modal-website-confirm');
+    if (confirmed) {
+      if (typeof _websiteConfirmCallback === 'function') {
+        const cb = _websiteConfirmCallback;
+        _websiteConfirmCallback = null;
+        cb();
+      }
+    } else {
+      if (typeof _websiteCancelCallback === 'function') {
+        const cb = _websiteCancelCallback;
+        _websiteCancelCallback = null;
+        cb();
+      }
+    }
+  }
+
+  // Universal In-Website Action Feedback Popup (for Edits, Adds, Deletes)
+  let _websiteAlertTimeout = null;
+  function showWebsitePopup(options) {
+    const {
+      title = 'Operation Completed',
+      message = 'Your updates have been securely synchronized.',
+      type = 'success',
+      autoCloseMs = 3200
+    } = typeof options === 'string' ? { message: options } : (options || {});
+
+    // Also dispatch toast for consistent feedback
+    if (typeof showToast === 'function') {
+      showToast(message, type);
+    }
+
+    const titleEl = document.getElementById('website-alert-title');
+    const msgEl = document.getElementById('website-alert-message');
+    const iconBox = document.getElementById('website-alert-icon-box');
+    const iconSvg = document.getElementById('website-alert-icon-svg');
+
+    if (titleEl) titleEl.innerText = title;
+    if (msgEl) msgEl.innerHTML = message;
+
+    if (iconBox && iconSvg) {
+      if (type === 'success') {
+        iconBox.className = 'w-14 h-14 mx-auto rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center';
+        iconSvg.innerHTML = '<svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>';
+      } else if (type === 'error') {
+        iconBox.className = 'w-14 h-14 mx-auto rounded-2xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center';
+        iconSvg.innerHTML = '<svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>';
+      } else {
+        iconBox.className = 'w-14 h-14 mx-auto rounded-2xl bg-slate-50 border border-slate-200 text-midnight-800 flex items-center justify-center';
+        iconSvg.innerHTML = '<svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>';
+      }
+    }
+
+    openModal('modal-website-alert');
+
+    if (_websiteAlertTimeout) clearTimeout(_websiteAlertTimeout);
+    if (autoCloseMs && autoCloseMs > 0) {
+      _websiteAlertTimeout = setTimeout(() => {
+        closeModal('modal-website-alert');
+      }, autoCloseMs);
+    }
+  }
+
+  // Override window.confirm so browser warnings are completely avoided in management sys
+  window.confirm = function(msg) {
+    console.warn('Native confirm intercepted and suppressed in management sys:', msg);
+    return false;
+  };
+
+  function openDrawer(id) {
+    const d = document.getElementById(id);
+    if (!d) return;
+    d.classList.remove('hidden');
+    setTimeout(() => {
+      const b = d.querySelector('.drawer-backdrop');
+      const c = d.querySelector('.drawer-content');
+      if (b) b.classList.remove('opacity-0');
+      if (c) c.classList.remove('translate-x-full');
+    }, 10);
+  }
+
+  function closeDrawer(id) {
+    const d = document.getElementById(id);
+    if (!d) return;
+    const b = d.querySelector('.drawer-backdrop');
+    const c = d.querySelector('.drawer-content');
+    if (b) b.classList.add('opacity-0');
+    if (c) c.classList.add('translate-x-full');
+    setTimeout(() => d.classList.add('hidden'), 250);
+  }
+
+  function showToast(message, type = 'info') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    const bgColors = {
+      info: 'bg-midnight-900 text-white border-midnight-700',
+      success: 'bg-emerald-800 text-white border-emerald-700',
+      error: 'bg-rose-800 text-white border-rose-700'
+    };
+    toast.className = `${bgColors[type] || bgColors.info} border px-4 py-3 rounded-xl shadow-xl text-xs font-semibold flex items-center space-x-2 pointer-events-auto transform transition-all duration-300 translate-y-2 opacity-0`;
+    toast.innerHTML = `<span class="w-2 h-2 rounded-full ${type === 'success' ? 'bg-emerald-400' : type === 'error' ? 'bg-rose-400' : 'bg-champagne-400'}"></span><span>${message}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => toast.classList.remove('translate-y-2', 'opacity-0'), 10);
+    setTimeout(() => {
+      toast.classList.add('opacity-0', 'translate-y-2');
+      setTimeout(() => toast.remove(), 300);
+    }, 3500);
+  }
+
+  function openAdminProfile() {
+    openDrawer('drawer-admin-profile');
+  }
+
+  function handleLogout() {
+    localStorage.removeItem('skybook-authenticated');
+    localStorage.removeItem('skybook-role');
+    localStorage.removeItem('skybook-user-name');
+    localStorage.removeItem('skybook-user-email');
+    localStorage.removeItem('skybook-user-initials');
+    window.location.href = '/Account/Logout';
+  }
+
+  function switchView(viewKey) {
+    const activePanel = document.getElementById('view-' + viewKey);
+    if (activePanel) {
+      if (window.state) { window.state.currentView = viewKey; }
+      document.querySelectorAll('.view-container').forEach(panel => panel.classList.remove('active'));
+      activePanel.classList.add('active');
+
+      document.querySelectorAll('.nav-item').forEach(btn => {
+        const target = btn.getAttribute('data-nav-target');
+        if (target === viewKey) {
+          btn.className = 'nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-xs font-semibold text-white bg-midnight-700/80 shadow-sm border border-midnight-600/50 group transition-colors';
+          const icon = btn.querySelector('svg');
+          if (icon) icon.className = 'w-4 h-4 text-champagne-400 flex-shrink-0';
+        } else {
+          btn.className = 'nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-midnight-700/50 group transition-colors';
+          const icon = btn.querySelector('svg');
+          if (icon) icon.className = 'w-4 h-4 text-slate-400 group-hover:text-champagne-400 flex-shrink-0';
+        }
+      });
+      try {
+        if (window.location.pathname.toLowerCase().includes('admindashboard')) {
+          history.replaceState(null, '', '/Admin/AdminDashboard?view=' + viewKey);
+        }
+      } catch(e) {}
+    } else {
+      if (viewKey === 'dashboard') window.location.href = '/Admin/AdminDashboard';
+      else if (viewKey === 'flights') window.location.href = '/Admin/AdminFlight';
+      else if (viewKey === 'airports') window.location.href = '/Admin/Airport';
+      else if (viewKey === 'aircraft') window.location.href = '/Admin/Aircraft';
+      else if (viewKey === 'bookings') window.location.href = '/Admin/AdminBooking';
+      else if (viewKey === 'customers' || viewKey === 'users') window.location.href = '/Admin/UserManagement';
+      else window.location.href = '/Admin/AdminDashboard';
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    // Sidebar toggle functionality
+    const toggleBtn = document.getElementById('sidebar-toggle-btn');
+    const sidebar = document.getElementById('main-sidebar');
+    if (toggleBtn && sidebar) {
+      let isCollapsed = false;
+      toggleBtn.addEventListener('click', () => {
+        isCollapsed = !isCollapsed;
+        sidebar.classList.toggle('w-64', !isCollapsed);
+        sidebar.classList.toggle('w-20', isCollapsed);
+        sidebar.classList.toggle('sidebar-collapsed', isCollapsed);
+        document.querySelectorAll('.sidebar-text').forEach(el => el.classList.toggle('hidden', isCollapsed));
+        document.querySelectorAll('#main-sidebar .nav-item').forEach(btn => {
+          btn.classList.toggle('justify-center', isCollapsed);
+          btn.classList.toggle('px-2', isCollapsed);
+          btn.classList.toggle('px-3', !isCollapsed);
+          btn.classList.toggle('space-x-3', !isCollapsed);
+        });
+        const brandContainer = document.getElementById('brand-container');
+        if (brandContainer) {
+          brandContainer.classList.toggle('justify-center', isCollapsed);
+          brandContainer.classList.toggle('w-full', isCollapsed);
+        }
+        const userCard = document.getElementById('sidebar-user-card');
+        if (userCard) {
+          userCard.classList.toggle('justify-center', isCollapsed);
+          const logoutBtn = userCard.querySelector('.sidebar-logout-btn');
+          if (logoutBtn) logoutBtn.classList.toggle('hidden', isCollapsed);
+        }
+      });
+    }
+
+    // Determine and highlight active navigation item from URL if not dashboard
+    const path = window.location.pathname.toLowerCase();
+    const params = new URLSearchParams(window.location.search);
+    const viewParam = params.get('view');
+    let currentNav = 'dashboard';
+    if (viewParam) {
+      currentNav = viewParam;
+    } else if (path.includes('flight')) {
+      currentNav = 'flights';
+    } else if (path.includes('airport')) {
+      currentNav = 'airports';
+    } else if (path.includes('aircraft')) {
+      currentNav = 'aircraft';
+    } else if (path.includes('booking')) {
+      currentNav = 'bookings';
+    } else if (path.includes('user') || path.includes('customer')) {
+      currentNav = 'users';
+    }
+
+    // Set active button style
+    document.querySelectorAll('#main-sidebar .nav-item').forEach(btn => {
+      const target = btn.getAttribute('data-nav-target');
+      if (target === currentNav || (currentNav === 'users' && target === 'customers')) {
+        btn.className = 'nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-xs font-semibold text-white bg-midnight-700/80 shadow-sm border border-midnight-600/50 group transition-colors';
+        const icon = btn.querySelector('svg');
+        if (icon) icon.className = 'w-4 h-4 text-champagne-400 flex-shrink-0';
+      } else {
+        btn.className = 'nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-midnight-700/50 group transition-colors';
+        const icon = btn.querySelector('svg');
+        if (icon) icon.className = 'w-4 h-4 text-slate-400 group-hover:text-champagne-400 flex-shrink-0';
+      }
+    });
+
+    if (viewParam && document.getElementById('view-' + viewParam)) {
+      document.querySelectorAll('.view-container').forEach(p => p.classList.remove('active'));
+      document.getElementById('view-' + viewParam).classList.add('active');
+    }
+  });
+</script>
+@RenderSection("Scripts", required: false)
+</body>
+</html>

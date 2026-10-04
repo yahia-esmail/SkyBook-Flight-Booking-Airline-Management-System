@@ -1,0 +1,224 @@
+@model SkyBook.Business.ViewModels.ProfileVM
+@using Microsoft.AspNetCore.Identity
+@using SkyBook.Data.Models
+@inject UserManager<ApplicationUser> UserManager
+@{
+    ViewData["Title"] = "My Profile";
+    Layout = "_Layout";
+
+    var appUser = await UserManager.GetUserAsync(User);
+    var isUserAdmin = User.IsInRole("Admin") || (appUser != null && await UserManager.IsInRoleAsync(appUser, "Admin"));
+
+    var fullName = Model?.FullName ?? "SkyBook Passenger";
+    var initials = "SB";
+    if (!string.IsNullOrWhiteSpace(Model?.FullName))
+    {
+        var parts = Model.FullName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length > 1)
+        {
+            initials = $"{parts[0][0]}{parts[1][0]}".ToUpper();
+        }
+        else if (parts.Length == 1 && parts[0].Length > 0)
+        {
+            initials = parts[0].Substring(0, Math.Min(2, parts[0].Length)).ToUpper();
+        }
+    }
+}
+
+<div class="min-h-[calc(100vh-5rem)] bg-[#F8F9FA] py-10 px-4 sm:px-6 lg:px-8">
+  <div class="max-w-4xl mx-auto space-y-6">
+
+    <!-- SUCCESS ALERT BANNER -->
+    @if (TempData["SuccessMessage"] != null)
+    {
+      <div class="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 shadow-sm flex items-center justify-between animate-fade-in" role="alert">
+        <div class="flex items-center gap-3">
+          <span class="material-symbols-outlined text-emerald-600 text-2xl">check_circle</span>
+          <div>
+            <p class="text-sm font-bold">Success</p>
+            <p class="text-xs text-emerald-700">@TempData["SuccessMessage"]</p>
+          </div>
+        </div>
+        <button type="button" onclick="this.parentElement.remove()" class="text-emerald-500 hover:text-emerald-800 p-1">
+          <span class="material-symbols-outlined text-lg">close</span>
+        </button>
+      </div>
+    }
+
+    <!-- PROFILE HERO BANNER -->
+    <div class="bg-[#0B192C] rounded-2xl shadow-xl p-6 sm:p-8 text-white relative overflow-hidden">
+      <!-- Decorative golden ambient glow -->
+      <div class="absolute -right-16 -top-16 w-80 h-80 bg-gradient-to-br from-[#D4A017]/25 to-transparent rounded-full blur-2xl pointer-events-none"></div>
+      <div class="absolute -left-10 -bottom-10 w-60 h-60 bg-gradient-to-tr from-sky-500/10 to-transparent rounded-full blur-2xl pointer-events-none"></div>
+
+      <div class="relative z-10 flex flex-col sm:flex-row items-center sm:items-center justify-between gap-6">
+        <div class="flex flex-col sm:flex-row items-center gap-6 text-center sm:text-left">
+          
+          <!-- Avatar display -->
+          <div class="relative flex-shrink-0">
+            <div class="w-24 h-24 rounded-full ring-4 ring-[#D4A017]/70 shadow-lg overflow-hidden bg-[#162840] flex items-center justify-center">
+              @if (!string.IsNullOrEmpty(Model?.ImageUrl))
+              {
+                <img src="@Model.ImageUrl" alt="@fullName" class="w-full h-full object-cover" onerror="this.style.display='none'; document.getElementById('hero-fallback').style.display='flex';" />
+                <span id="hero-fallback" class="font-bold text-2xl text-[#C5A880]" style="display:none;">@initials</span>
+              }
+              else
+              {
+                <span class="font-bold text-2xl text-[#C5A880]">@initials</span>
+              }
+            </div>
+            <span class="absolute bottom-0 right-0 w-6 h-6 bg-emerald-500 rounded-full border-2 border-[#0B192C] flex items-center justify-center" title="Verified Passenger">
+              <span class="material-symbols-outlined text-white text-[14px]">check</span>
+            </span>
+          </div>
+
+          <!-- User Title & Credentials -->
+          <div class="space-y-1.5">
+            <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
+              <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-white">@fullName</h1>
+              <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#D4A017]/20 text-[#E8C547] border border-[#D4A017]/30">
+                <span class="material-symbols-outlined text-[13px]">verified</span> Verified Passenger
+              </span>
+            </div>
+
+            <p class="text-sm text-slate-300 flex items-center justify-center sm:justify-start gap-2">
+              <span class="material-symbols-outlined text-[16px] text-[#C5A880]">mail</span>
+              <span>@(Model?.Email ?? "No email address")</span>
+            </p>
+
+            <div class="flex flex-wrap items-center justify-center sm:justify-start gap-4 text-xs text-slate-400 pt-1">
+              @if (!string.IsNullOrEmpty(Model?.Country))
+              {
+                <span class="flex items-center gap-1">
+                  <span class="material-symbols-outlined text-[14px]">public</span>
+                  <span>@Model.Country</span>
+                </span>
+              }
+              @if (!string.IsNullOrEmpty(Model?.PhoneNumber))
+              {
+                <span class="flex items-center gap-1">
+                  <span class="material-symbols-outlined text-[14px]">call</span>
+                  <span>@Model.PhoneNumber</span>
+                </span>
+              }
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Top Actions -->
+        <div class="flex items-center gap-2.5 self-center sm:self-start">
+          <a href="@Url.Action("Edit", "Profile")"
+             class="px-4 py-2.5 rounded-xl text-xs font-semibold bg-[#D4A017] hover:bg-[#E8C547] text-[#0B192C] shadow-md transition-all duration-150 flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[16px]">edit</span>
+            <span>Edit Profile</span>
+          </a>
+          <a href="@Url.Action("Logout", "Account")"
+             class="px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-white/10 hover:bg-rose-600/80 text-slate-200 hover:text-white border border-white/10 transition-all duration-150 flex items-center gap-1">
+            <span class="material-symbols-outlined text-[16px]">logout</span>
+            <span>Sign Out</span>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN PROFILE DETAILS CARD -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6 sm:p-8 space-y-6">
+      <div class="flex items-center justify-between pb-4 border-b border-slate-100">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-[#D4A017] text-2xl">person</span>
+          <div>
+            <h2 class="text-lg font-bold text-[#0B192C]">Personal Information</h2>
+            <p class="text-xs text-slate-500">Your profile credentials registered with SkyBook Luxury Airways.</p>
+          </div>
+        </div>
+        <a href="@Url.Action("Edit", "Profile")" class="text-xs font-bold text-[#0B192C] hover:text-[#D4A017] flex items-center gap-1 transition">
+          <span class="material-symbols-outlined text-[16px]">edit_square</span>
+          <span>Edit Details</span>
+        </a>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <!-- Full Legal Name -->
+        <div class="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-1">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">Full Legal Name</span>
+          <p class="text-sm font-semibold text-[#0B192C] flex items-center gap-2">
+            <span class="material-symbols-outlined text-slate-400 text-base">badge</span>
+            <span>@(string.IsNullOrEmpty(Model?.FullName) ? "Not set" : Model.FullName)</span>
+          </p>
+        </div>
+
+        <!-- Email Address -->
+        <div class="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-1">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">Email Address (Username)</span>
+          <p class="text-sm font-semibold text-[#0B192C] flex items-center gap-2">
+            <span class="material-symbols-outlined text-slate-400 text-base">mail</span>
+            <span>@(string.IsNullOrEmpty(Model?.Email) ? "Not set" : Model.Email)</span>
+          </p>
+        </div>
+
+        <!-- Country of Residence -->
+        <div class="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-1">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">Country of Residence</span>
+          <p class="text-sm font-semibold text-[#0B192C] flex items-center gap-2">
+            <span class="material-symbols-outlined text-slate-400 text-base">public</span>
+            <span>@(string.IsNullOrEmpty(Model?.Country) ? "Not set" : Model.Country)</span>
+          </p>
+        </div>
+
+        <!-- Phone Number -->
+        <div class="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-1">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">Phone Number</span>
+          <p class="text-sm font-semibold text-[#0B192C] flex items-center gap-2">
+            <span class="material-symbols-outlined text-slate-400 text-base">call</span>
+            <span>@(string.IsNullOrEmpty(Model?.PhoneNumber) ? "Not provided" : Model.PhoneNumber)</span>
+          </p>
+        </div>
+
+        <!-- Profile Photo URL -->
+        <div class="sm:col-span-2 p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-1">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">Profile Image Link</span>
+          <p class="text-xs text-slate-700 truncate flex items-center gap-2 font-mono">
+            <span class="material-symbols-outlined text-slate-400 text-base">image</span>
+            <span>@(string.IsNullOrEmpty(Model?.ImageUrl) ? "No custom photo set (using default avatar)" : Model.ImageUrl)</span>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROFILE SHORTCUTS / ACTION CARDS -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+      <!-- Change Password Card -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6 flex flex-col justify-between space-y-4 hover:border-slate-300 transition">
+        <div class="space-y-2">
+          <div class="w-10 h-10 rounded-xl bg-slate-100 text-[#0B192C] flex items-center justify-center">
+            <span class="material-symbols-outlined text-xl">lock_reset</span>
+          </div>
+          <h3 class="text-base font-bold text-[#0B192C]">Account Security</h3>
+          <p class="text-xs text-slate-500 leading-relaxed">Update your password regularly to protect your flight bookings, frequent flyer status, and travel data.</p>
+        </div>
+        <a href="@Url.Action("ChangePassword", "Profile")"
+           class="inline-flex items-center gap-1.5 text-xs font-bold text-[#0B192C] hover:text-[#D4A017] transition pt-2">
+          <span>Change Password</span>
+          <span class="material-symbols-outlined text-sm">arrow_forward</span>
+        </a>
+      </div>
+
+      <!-- My Bookings Card -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6 flex flex-col justify-between space-y-4 hover:border-slate-300 transition">
+        <div class="space-y-2">
+          <div class="w-10 h-10 rounded-xl bg-[#0B192C] text-[#C5A880] flex items-center justify-center">
+            <span class="material-symbols-outlined text-xl">airplane_ticket</span>
+          </div>
+          <h3 class="text-base font-bold text-[#0B192C]">Flight Bookings</h3>
+          <p class="text-xs text-slate-500 leading-relaxed">View all your confirmed itineraries, check flight schedules, select preferred seats, and download tickets.</p>
+        </div>
+        <a href="@Url.Action("MyBookings", "Profile")"
+           class="inline-flex items-center gap-1.5 text-xs font-bold text-[#0B192C] hover:text-[#D4A017] transition pt-2">
+          <span>View My Bookings</span>
+          <span class="material-symbols-outlined text-sm">arrow_forward</span>
+        </a>
+      </div>
+    </div>
+
+  </div>
+</div>

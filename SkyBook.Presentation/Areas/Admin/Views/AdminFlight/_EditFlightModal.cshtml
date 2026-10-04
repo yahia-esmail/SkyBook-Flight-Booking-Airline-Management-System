@@ -1,0 +1,180 @@
+@* Edit flight modal *@
+@{
+    var airports = ViewBag.Airports as IEnumerable<SkyBook.Business.ViewModels.AirportVM> ?? Enumerable.Empty<SkyBook.Business.ViewModels.AirportVM>();
+    var aircrafts = ViewBag.Aircrafts as IEnumerable<SkyBook.Business.ViewModels.AircraftVM> ?? Enumerable.Empty<SkyBook.Business.ViewModels.AircraftVM>();
+}
+
+<div class="fixed inset-0 z-50 flex items-center justify-center hidden" data-purpose="modal-flight-form" id="modal-edit-flight">
+  <div class="absolute inset-0 bg-midnight-900/60 backdrop-blur-xs" onclick="closeModal('modal-edit-flight')"></div>
+  <div class="relative bg-white rounded-xl shadow-2xl max-w-xl w-full mx-4 overflow-hidden border border-slate-200 z-10 animate-scale">
+    <div class="h-14 bg-midnight-800 px-6 flex items-center justify-between text-white">
+      <h3 class="text-sm font-bold flex items-center gap-2">
+        <svg class="w-4 h-4 text-champagne-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+        Edit Sovereign Flight Schedule
+      </h3>
+      <button class="text-slate-400 hover:text-white" onclick="closeModal('modal-edit-flight')" type="button">✕</button>
+    </div>
+    
+    <form asp-area="Admin" asp-controller="AdminFlight" asp-action="Edit" method="post" id="form-edit-flight" class="p-6 space-y-4 text-xs max-h-[82vh] overflow-y-auto">
+      @Html.AntiForgeryToken()
+      <input type="hidden" id="edit-flight-return-page" name="returnPage" value="1" />
+      <input type="hidden" id="ef-id" name="Id">
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Flight Number <span class="text-rose-500">*</span></label>
+          <input name="FlightNumber" class="w-full text-xs font-mono uppercase rounded-lg border-slate-200 bg-slate-50 focus:border-champagne-500 focus:ring-1 focus:ring-champagne-500" id="ef-flightno" maxlength="20" required type="text">
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Assigned Aircraft <span class="text-rose-500">*</span></label>
+          <select name="AircraftId" class="w-full text-xs rounded-lg border-slate-200 bg-slate-50 focus:border-champagne-500 focus:ring-1 focus:ring-champagne-500" id="ef-aircraft" required>
+            @if (!aircrafts.Any(p => p.Status == AircraftStatus.Active))
+            {
+                <option value="" disabled>No active aircraft in fleet</option>
+            }
+            else
+            {
+                @foreach (var plane in aircrafts)
+                {
+                    if (plane.Status == AircraftStatus.Active)
+                    {
+                        <option value="@plane.Id">@plane.Name (@plane.Capacity seats)</option>
+                    }
+                    else
+                    {
+                        <option value="@plane.Id" disabled class="text-slate-400 bg-slate-100 italic">@plane.Name (@plane.Capacity seats - @plane.Status: Unavailable)</option>
+                    }
+                }
+            }
+          </select>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Departure Origin (IATA) <span class="text-rose-500">*</span></label>
+          <select name="DepartureAirportId" class="w-full text-xs rounded-lg border-slate-200 bg-slate-50 focus:border-champagne-500 focus:ring-1 focus:ring-champagne-500" id="ef-origin" required onchange="filterStopAirports('edit')">
+            @if (!airports.Any(a => a.Status == AirportStatus.Active))
+            {
+                <option value="" disabled>No active airports available</option>
+            }
+            else
+            {
+                @foreach (var port in airports)
+                {
+                    if (port.Status == AirportStatus.Active)
+                    {
+                        <option value="@port.Id">@port.Code - @port.City (@port.Name)</option>
+                    }
+                    else
+                    {
+                        <option value="@port.Id" disabled class="text-slate-400 bg-slate-100 italic">@port.Code - @port.City (@port.Name) - [@port.Status: Unavailable]</option>
+                    }
+                }
+            }
+          </select>
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Destination Arrival (IATA) <span class="text-rose-500">*</span></label>
+          <select name="ArrivalAirportId" class="w-full text-xs rounded-lg border-slate-200 bg-slate-50 focus:border-champagne-500 focus:ring-1 focus:ring-champagne-500" id="ef-destination" required onchange="filterStopAirports('edit')">
+            @if (!airports.Any(a => a.Status == AirportStatus.Active))
+            {
+                <option value="" disabled>No active airports available</option>
+            }
+            else
+            {
+                @foreach (var port in airports)
+                {
+                    if (port.Status == AirportStatus.Active)
+                    {
+                        <option value="@port.Id">@port.Code - @port.City (@port.Name)</option>
+                    }
+                    else
+                    {
+                        <option value="@port.Id" disabled class="text-slate-400 bg-slate-100 italic">@port.Code - @port.City (@port.Name) - [@port.Status: Unavailable]</option>
+                    }
+                }
+            }
+          </select>
+        </div>
+      </div>
+
+      <!-- INTERMEDIATE STOPS / TRANSIT PLACES -->
+      <div class="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 space-y-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-2">
+            <svg class="w-4 h-4 text-champagne-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+            <label class="block font-bold text-slate-800 text-xs">Transit Stops &amp; Places</label>
+            <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700" id="edit-stops-count-badge">Direct (0 Stops)</span>
+          </div>
+          <button type="button" onclick="addStopRow('edit')" class="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-midnight-800 text-white text-[11px] font-semibold hover:bg-midnight-900 transition shadow-xs cursor-pointer">
+            <span>+ Add Place</span>
+          </button>
+        </div>
+
+        <div id="edit-stops-container" class="space-y-2.5">
+          <div id="edit-stops-empty-msg" class="p-3 bg-white rounded-lg border border-dashed border-slate-300 text-center text-slate-500 text-[11px]">
+            Direct flight (no intermediate stops). Click <span class="font-bold text-midnight-800">+ Add Place</span> if this flight stops at other airports.
+          </div>
+        </div>
+
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Departure Time <span class="text-rose-500">*</span></label>
+          <input name="DepartureTime" class="w-full text-xs rounded-lg border-slate-200 bg-slate-50 focus:border-champagne-500 focus:ring-1 focus:ring-champagne-500" id="ef-dept-time" required type="datetime-local">
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Arrival Time <span class="text-rose-500">*</span></label>
+          <input name="ArrivalTime" class="w-full text-xs rounded-lg border-slate-200 bg-slate-50 focus:border-champagne-500 focus:ring-1 focus:ring-champagne-500" id="ef-arr-time" required type="datetime-local">
+        </div>
+      </div>
+
+      <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/80 space-y-2">
+        <label class="block font-semibold text-slate-700 text-xs">Class Fares (EGP) <span class="text-rose-500">*</span></label>
+        <div class="grid grid-cols-3 gap-2.5">
+          <div>
+            <label class="block text-[11px] font-medium text-slate-500 mb-1 flex items-center gap-1">
+              <span class="w-2 h-2 rounded-full bg-slate-400"></span> Economy
+            </label>
+            <input name="EconomyPrice" id="ef-economy-fare" class="w-full text-xs font-mono rounded-lg border-slate-200 bg-white focus:border-champagne-500 focus:ring-1 focus:ring-champagne-500" required type="number" step="0.01" min="1" placeholder="350.00" oninput="document.getElementById('ef-fare').value = this.value">
+          </div>
+          <div>
+            <label class="block text-[11px] font-medium text-slate-500 mb-1 flex items-center gap-1">
+              <span class="w-2 h-2 rounded-full bg-indigo-500"></span> Business
+            </label>
+            <input name="BusinessPrice" id="ef-business-fare" class="w-full text-xs font-mono rounded-lg border-slate-200 bg-white focus:border-champagne-500 focus:ring-1 focus:ring-champagne-500" required type="number" step="0.01" min="1" placeholder="850.00">
+          </div>
+          <div>
+            <label class="block text-[11px] font-medium text-slate-500 mb-1 flex items-center gap-1">
+              <span class="w-2 h-2 rounded-full bg-champagne-500"></span> First Class
+            </label>
+            <input name="FirstClassPrice" id="ef-firstclass-fare" class="w-full text-xs font-mono rounded-lg border-slate-200 bg-white focus:border-champagne-500 focus:ring-1 focus:ring-champagne-500" required type="number" step="0.01" min="1" placeholder="1800.00">
+          </div>
+        </div>
+        <input type="hidden" name="Price" id="ef-fare" value="0">
+      </div>
+
+      <div>
+        <label class="block font-semibold text-slate-700 mb-1">Flight Status <span class="text-rose-500">*</span></label>
+        <select name="Status" class="w-full text-xs rounded-lg border-slate-200 bg-slate-50 focus:border-champagne-500 focus:ring-1 focus:ring-champagne-500" id="ef-status">
+          <option value="1">Scheduled</option>
+          <option value="3">Boarding</option>
+          <option value="4">Departed (In Flight)</option>
+          <option value="2">Delayed</option>
+          <option value="5">Landed</option>
+          <option value="6">Cancelled</option>
+        </select>
+      </div>
+
+      <div class="pt-4 border-t border-slate-100 flex items-center justify-end space-x-2">
+        <button class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition" onclick="closeModal('modal-edit-flight')" type="button">Cancel</button>
+        <button class="px-4 py-2 bg-midnight-800 text-white font-semibold rounded-lg hover:bg-midnight-900 shadow-sm transition" type="submit">Update Flight Schedule</button>
+      </div>
+    </form>
+  </div>
+</div>

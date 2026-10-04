@@ -1,0 +1,736 @@
+@model IEnumerable<SkyBook.Business.ViewModels.FlightVM>
+@{
+    ViewData["Title"] = "Flights";
+    Layout = "_AdminLayout";
+    var flightsList = Model?.ToList() ?? new List<SkyBook.Business.ViewModels.FlightVM>();
+}
+
+<!-- Top header strip -->
+<header class="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between z-20 flex-shrink-0">
+  <div>
+    <h1 class="text-sm font-bold text-midnight-900">Flights Operations</h1>
+    <p class="text-[11px] text-slate-500">SkyBook Operations Console &bull; Sovereign Flight Dispatch</p>
+  </div>
+  <a href="@Url.Action("Index", "AdminDashboard", new { area = "Admin" })" class="text-xs font-semibold text-champagne-600 hover:text-champagne-700 hover:underline">&larr; Full Dashboard</a>
+</header>
+
+<main class="flex-1 overflow-y-auto p-6 bg-[#F8FAFC]" id="viewport-root">
+
+  @if (TempData["Success"] != null)
+  {
+      <div class="mb-4 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between shadow-xs">
+          <div class="flex items-center gap-2.5">
+              <svg class="w-4 h-4 text-emerald-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+              </svg>
+              <span class="font-semibold">@TempData["Success"]</span>
+          </div>
+          <button type="button" onclick="this.parentElement.remove()" class="text-emerald-500 hover:text-emerald-700 font-bold ml-4">✕</button>
+      </div>
+  }
+
+  @if (TempData["Error"] != null)
+  {
+      <div class="mb-4 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center justify-between shadow-xs">
+          <div class="flex items-center gap-2.5">
+              <svg class="w-4 h-4 text-rose-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+              </svg>
+              <span class="font-semibold">@TempData["Error"]</span>
+          </div>
+          <button type="button" onclick="this.parentElement.remove()" class="text-rose-500 hover:text-rose-700 font-bold ml-4">✕</button>
+      </div>
+  }
+
+  <section class="view-container space-y-6 active" data-purpose="flights-management" id="view-flights">
+    
+    <!-- Controls & Action Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
+      <div class="flex flex-wrap items-center gap-3 flex-1">
+        <div class="relative w-72">
+          <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+          </svg>
+          <input class="w-full text-xs bg-slate-50 rounded-xl pl-9 pr-3 py-2.5 border border-slate-200 focus:outline-none focus:ring-1 focus:ring-champagne-500 shadow-inner" 
+                 id="flights-search" 
+                 oninput="filterFlights(this.value)" 
+                 placeholder="Search flight number, city, or airport..." 
+                 type="text">
+        </div>
+        <div class="flex items-center space-x-1 text-xs">
+          <button class="flight-filter-pill active px-3 py-1.5 rounded-lg bg-midnight-800 text-white font-medium transition" onclick="setFlightFilter('ALL', this)">All Flights (@flightsList.Count)</button>
+          <button class="flight-filter-pill px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium transition" onclick="setFlightFilter('Scheduled', this)">Scheduled</button>
+          <button class="flight-filter-pill px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium transition" onclick="setFlightFilter('Departed', this)">In Flight</button>
+          <button class="flight-filter-pill px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium transition" onclick="setFlightFilter('Delayed', this)">Delayed</button>
+          <button class="flight-filter-pill px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium transition" onclick="setFlightFilter('Cancelled', this)">Cancelled</button>
+        </div>
+      </div>
+      <button type="button" 
+              class="inline-flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-midnight-800 text-white text-xs font-semibold hover:bg-midnight-900 shadow-sm transition-all self-start sm:self-auto shrink-0" 
+              onclick="openAddFlightModal()">
+        <svg class="w-3.5 h-3.5 text-champagne-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path></svg>
+        <span>+ Create Flight</span>
+      </button>
+    </div>
+
+    <!-- Data Table Card -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+      @if (flightsList.Any())
+      {
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-600" id="flights-table">
+            <thead class="bg-slate-50/80 text-[11px] uppercase tracking-wider text-slate-400 font-semibold border-b border-slate-100">
+              <tr>
+                <th class="py-3 px-4">Flight</th>
+                <th class="py-3 px-4">Origin &rarr; Destination</th>
+                <th class="py-3 px-4">Departure Time</th>
+                <th class="py-3 px-4">Arrival Time</th>
+                <th class="py-3 px-4">Assigned Aircraft</th>
+                <th class="py-3 px-4">Fares by Class</th>
+                <th class="py-3 px-4">Status</th>
+                <th class="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 font-medium" id="all-flights-body">
+              @foreach (var flight in flightsList)
+              {
+                var statusStr = flight.Status.ToString();
+                var deptTimeIso = flight.DepartureTime.ToString("yyyy-MM-ddTHH:mm");
+                var arrTimeIso = flight.ArrivalTime.ToString("yyyy-MM-ddTHH:mm");
+                var stopSearch = string.Join(" ", flight.Stops?.Select(s => $"{s.AirportCode} {s.AirportCity}") ?? Enumerable.Empty<string>());
+                var searchIndex = $"{flight.FlightNumber} {flight.DepartureAirportCode} {flight.DepartureAirportCity} {flight.ArrivalAirportCode} {flight.ArrivalAirportCity} {flight.AircraftName} {stopSearch}".ToLower();
+
+                <tr class="flight-row hover:bg-slate-50/70 transition-colors" 
+                    data-search="@searchIndex" 
+                    data-status="@statusStr">
+                  <td class="py-3.5 px-4 font-mono font-bold text-midnight-900">
+                    <span class="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-midnight-900">@flight.FlightNumber</span>
+                  </td>
+                  <td class="py-3.5 px-4">
+                    <div class="flex items-center space-x-1.5 flex-wrap">
+                      <span class="font-bold text-midnight-900 font-mono">@(flight.DepartureAirportCode ?? "N/A")</span>
+                      <span class="text-[11px] text-slate-400">(@(flight.DepartureAirportCity ?? "Unknown"))</span>
+                      <span class="text-champagne-500 font-bold">&rarr;</span>
+                      @if (flight.Stops != null && flight.Stops.Any())
+                      {
+                        foreach (var s in flight.Stops.OrderBy(x => x.StopOrder))
+                        {
+                          <span class="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-mono font-bold cursor-help" 
+                                title="@s.AirportCode: @s.AirportName (@s.AirportCity)">
+                            <span>@s.AirportCode</span>
+                          </span>
+                          <span class="text-champagne-500 font-bold">&rarr;</span>
+                        }
+                      }
+                      <span class="font-bold text-midnight-900 font-mono">@(flight.ArrivalAirportCode ?? "N/A")</span>
+                      <span class="text-[11px] text-slate-400">(@(flight.ArrivalAirportCity ?? "Unknown"))</span>
+                    </div>
+                    <div class="mt-1 flex items-center gap-1.5">
+                      @if (flight.IsDirect)
+                      {
+                        <span class="inline-flex items-center text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
+                          Non-stop Direct
+                        </span>
+                      }
+                      else
+                      {
+                        <span class="inline-flex items-center text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200/60" 
+                              title="@(flight.Stops != null ? string.Join(" → ", flight.Stops.OrderBy(x => x.StopOrder).Select(x => $"{x.AirportCode} ({x.AirportCity})")) : "")">
+                          @(flight.Stops?.Count == 1 ? $"1 Transit Stop ({flight.Stops.First().AirportCode})" : $"{flight.Stops?.Count ?? 0} Transit Stops")
+                        </span>
+                      }
+                    </div>
+                  </td>
+                  <td class="py-3.5 px-4">
+                    <span class="font-mono text-slate-800 block font-semibold">@flight.DepartureTime.ToString("dd MMM yyyy")</span>
+                    <span class="font-mono text-slate-500 text-[11px]">@flight.DepartureTime.ToString("HH:mm") UTC</span>
+                  </td>
+                  <td class="py-3.5 px-4">
+                    <span class="font-mono text-slate-800 block font-semibold">@flight.ArrivalTime.ToString("dd MMM yyyy")</span>
+                    <span class="font-mono text-slate-500 text-[11px]">@flight.ArrivalTime.ToString("HH:mm") UTC</span>
+                  </td>
+                  <td class="py-3.5 px-4">
+                    <span class="font-semibold text-slate-800">@(flight.AircraftName ?? "Unassigned")</span>
+                  </td>
+                  <td class="py-3 px-4">
+                    <div class="space-y-1 font-mono text-[11px] leading-tight min-w-[110px]">
+                      <div class="flex items-center justify-between text-slate-600">
+                        <span class="text-[10px] font-semibold text-slate-400">ECO</span>
+                        <span class="font-bold text-slate-800">$@((flight.EconomyPrice > 0 ? flight.EconomyPrice : flight.Price).ToString("N0"))</span>
+                      </div>
+                      <div class="flex items-center justify-between text-indigo-700">
+                        <span class="text-[10px] font-semibold text-indigo-400">BIZ</span>
+                        <span class="font-bold">$@((flight.BusinessPrice > 0 ? flight.BusinessPrice : flight.Price * 2.5m).ToString("N0"))</span>
+                      </div>
+                      <div class="flex items-center justify-between text-champagne-600">
+                        <span class="text-[10px] font-semibold text-champagne-400">FIRST</span>
+                        <span class="font-bold text-midnight-900">$@((flight.FirstClassPrice > 0 ? flight.FirstClassPrice : flight.Price * 4m).ToString("N0"))</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="py-3.5 px-4">
+                    @if (flight.Status == SkyBook.Data.Models.FlightStatus.Departed || flight.Status == SkyBook.Data.Models.FlightStatus.Boarding)
+                    {
+                      <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5 animate-pulse"></span>@(flight.Status == SkyBook.Data.Models.FlightStatus.Departed ? "In Flight" : "Boarding")
+                      </span>
+                    }
+                    else if (flight.Status == SkyBook.Data.Models.FlightStatus.Scheduled)
+                    {
+                      <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200/60">
+                        <span class="w-1.5 h-1.5 rounded-full bg-blue-500 mr-1.5"></span>Scheduled
+                      </span>
+                    }
+                    else if (flight.Status == SkyBook.Data.Models.FlightStatus.Delayed)
+                    {
+                      <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200/60">
+                        <span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>Delayed
+                      </span>
+                    }
+                    else if (flight.Status == SkyBook.Data.Models.FlightStatus.Cancelled)
+                    {
+                      <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200/60">
+                        <span class="w-1.5 h-1.5 rounded-full bg-rose-500 mr-1.5"></span>Cancelled
+                      </span>
+                    }
+                    else
+                    {
+                      <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                        <span class="w-1.5 h-1.5 rounded-full bg-slate-400 mr-1.5"></span>@flight.Status
+                      </span>
+                    }
+                  </td>
+                  <td class="py-3.5 px-4 text-right space-x-2">
+                    <button type="button" 
+                            class="text-xs text-midnight-800 hover:text-midnight-950 font-semibold px-2 py-1 rounded hover:bg-slate-100 transition"
+                            data-id="@flight.Id"
+                            data-flightno="@flight.FlightNumber"
+                            data-aircraft-id="@flight.AircraftId"
+                            data-dept-id="@flight.DepartureAirportId"
+                            data-arr-id="@flight.ArrivalAirportId"
+                            data-dept-time="@deptTimeIso"
+                            data-arr-time="@arrTimeIso"
+                            data-price="@flight.Price"
+                            data-economy-price="@(flight.EconomyPrice > 0 ? flight.EconomyPrice : flight.Price)"
+                            data-business-price="@(flight.BusinessPrice > 0 ? flight.BusinessPrice : flight.Price * 2.5m)"
+                            data-first-price="@(flight.FirstClassPrice > 0 ? flight.FirstClassPrice : flight.Price * 4m)"
+                            data-status="@((int)flight.Status)"
+                            data-stops='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(flight.Stops?.OrderBy(s => s.StopOrder).Select(s => new { s.AirportId }) ?? Enumerable.Empty<object>()))'
+                            onclick="handleEditFlightClick(this)">
+                      Edit
+                    </button>
+                    <button type="button" 
+                            class="text-xs text-rose-500 hover:text-rose-700 font-semibold px-2 py-1 rounded hover:bg-rose-50 transition"
+                            onclick="openDeleteFlightModal(@flight.Id, '@flight.FlightNumber')">
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination Footer -->
+        <div id="flights-pagination" class="border-t border-slate-100 px-5 py-3 bg-slate-50/50 flex items-center justify-center">
+          <nav id="flights-pagination-nav" class="flex items-center gap-1.5" aria-label="Flights pagination">
+            <button type="button" id="flights-prev-btn" onclick="prevFlightPage()" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-white hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+              <span>Previous</span>
+            </button>
+            <div id="flights-page-numbers" class="flex items-center gap-1"></div>
+            <button type="button" id="flights-next-btn" onclick="nextFlightPage()" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-white hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs">
+              <span>Next</span>
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </button>
+          </nav>
+        </div>
+      }
+      else
+      {
+        <!-- Empty State -->
+        <div class="py-16 text-center px-4">
+          <div class="w-14 h-14 rounded-2xl bg-midnight-50 text-midnight-800 flex items-center justify-center mx-auto mb-3 border border-slate-200">
+            <svg class="w-7 h-7 text-champagne-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+            </svg>
+          </div>
+          <h3 class="text-sm font-bold text-midnight-900">No Flights Scheduled</h3>
+          <p class="text-xs text-slate-500 mt-1 max-w-sm mx-auto">There are currently no active flight schedules in the sovereign network. Create a flight to activate passenger booking corridors.</p>
+          <button type="button" 
+                  onclick="openAddFlightModal()" 
+                  class="mt-4 inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-midnight-800 text-white text-xs font-semibold hover:bg-midnight-900 shadow-sm transition">
+            <svg class="w-3.5 h-3.5 text-champagne-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path></svg>
+            <span>+ Schedule Sovereign Flight</span>
+          </button>
+        </div>
+      }
+
+      <!-- Search No-Matches State (hidden by default) -->
+      <div id="no-search-results" class="py-12 text-center bg-white p-6 hidden">
+        <div class="w-10 h-10 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+          </svg>
+        </div>
+        <h4 class="text-xs font-bold text-midnight-900">No Flights Match Your Filter</h4>
+        <p class="text-[11px] text-slate-500 mt-0.5">Try searching with a different flight code, city name, or status.</p>
+      </div>
+
+    </div>
+  </section>
+</main>
+
+@* ========================================= *@
+@* DELETE FLIGHT MODAL                       *@
+@* ========================================= *@
+<div class="fixed inset-0 z-50 overflow-hidden hidden" id="modal-delete-flight">
+  <div class="absolute inset-0 bg-midnight-900/60 backdrop-blur-xs" onclick="closeModal('modal-delete-flight')"></div>
+  <div class="flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm relative z-10 border border-slate-200 animate-scale">
+      <div class="w-12 h-12 rounded-xl bg-rose-50 text-rose-500 flex items-center justify-center mb-4 border border-rose-100">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+        </svg>
+      </div>
+      <h3 class="text-base font-bold text-midnight-900 mb-1">Delete Flight Schedule?</h3>
+      <p class="text-xs text-slate-500 mb-2">This will remove flight <span id="delete-flight-number" class="font-bold text-midnight-900 font-mono">--</span> and cancel passenger booking assignments.</p>
+      
+      <form id="delete-flight-form" action="/Admin/AdminFlight/Delete" method="post" class="mt-4 flex space-x-2">
+        @Html.AntiForgeryToken()
+        <input type="hidden" id="delete-flight-return-page" name="returnPage" value="1" />
+        <input type="hidden" id="delete-flight-id" name="id" />
+        <button type="button" class="flex-1 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition" onclick="closeModal('modal-delete-flight')">Cancel</button>
+        <button type="submit" class="flex-1 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition">Delete</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+@section Scripts {
+<script id="active-airports-data" type="application/json">
+    @Html.Raw(System.Text.Json.JsonSerializer.Serialize((ViewBag.Airports as IEnumerable<SkyBook.Business.ViewModels.AirportVM>)?.Select(a => new { a.Id, a.Code, a.Name, a.City, a.Country }) ?? Enumerable.Empty<object>()))
+</script>
+<script>
+    let activeFilter = 'ALL';
+
+    const flightPagination = {
+        currentPage: 1,
+        pageSize: 8,
+        matchingRows: []
+    };
+
+    function updateFlightPagination() {
+        const total = flightPagination.matchingRows.length;
+        const totalPages = Math.ceil(total / flightPagination.pageSize) || 1;
+        if (flightPagination.currentPage > totalPages) {
+            flightPagination.currentPage = totalPages;
+        }
+        if (flightPagination.currentPage < 1) {
+            flightPagination.currentPage = 1;
+        }
+
+        const startIndex = (flightPagination.currentPage - 1) * flightPagination.pageSize;
+        const endIndex = startIndex + flightPagination.pageSize;
+
+        const allRows = document.querySelectorAll('.flight-row');
+        allRows.forEach(row => row.classList.add('hidden'));
+
+        flightPagination.matchingRows.forEach((row, idx) => {
+            if (idx >= startIndex && idx < endIndex) {
+                row.classList.remove('hidden');
+            }
+        });
+
+        const paginationBar = document.getElementById('flights-pagination');
+        if (paginationBar) {
+            paginationBar.classList.toggle('hidden', total === 0);
+        }
+
+        const prevBtn = document.getElementById('flights-prev-btn');
+        const nextBtn = document.getElementById('flights-next-btn');
+        if (prevBtn) prevBtn.disabled = (flightPagination.currentPage <= 1);
+        if (nextBtn) nextBtn.disabled = (flightPagination.currentPage >= totalPages);
+
+        renderFlightPageNumbers(totalPages, flightPagination.currentPage);
+    }
+
+    function renderFlightPageNumbers(totalPages, current) {
+        const container = document.getElementById('flights-page-numbers');
+        if (!container) return;
+        container.innerHTML = '';
+
+        if (totalPages <= 1) return;
+
+        const pages = [];
+        if (totalPages <= 7) {
+            for (let i = 1; i <= totalPages; i++) pages.push(i);
+        } else {
+            pages.push(1);
+            if (current > 3) pages.push('...');
+            const start = Math.max(2, current - 1);
+            const end = Math.min(totalPages - 1, current + 1);
+            for (let i = start; i <= end; i++) {
+                if (!pages.includes(i)) pages.push(i);
+            }
+            if (current < totalPages - 2) pages.push('...');
+            if (!pages.includes(totalPages)) pages.push(totalPages);
+        }
+
+        pages.forEach(p => {
+            if (p === '...') {
+                const span = document.createElement('span');
+                span.className = 'px-2 py-1 text-slate-400 text-xs font-mono select-none';
+                span.textContent = '...';
+                container.appendChild(span);
+            } else {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.textContent = p;
+                if (p === current) {
+                    btn.className = 'w-8 h-8 rounded-lg bg-midnight-900 text-white font-bold text-xs shadow-xs border border-midnight-950 flex items-center justify-center';
+                } else {
+                    btn.className = 'w-8 h-8 rounded-lg bg-white hover:bg-slate-100 text-slate-700 font-semibold text-xs border border-slate-200 hover:border-slate-300 transition flex items-center justify-center';
+                    btn.onclick = () => goToFlightPage(p);
+                }
+                container.appendChild(btn);
+            }
+        });
+    }
+
+    function goToFlightPage(page) {
+        flightPagination.currentPage = page;
+        updateFlightPagination();
+        scrollToTopFlights();
+    }
+
+    function prevFlightPage() {
+        if (flightPagination.currentPage > 1) {
+            flightPagination.currentPage--;
+            updateFlightPagination();
+            scrollToTopFlights();
+        }
+    }
+
+    function nextFlightPage() {
+        const totalPages = Math.ceil(flightPagination.matchingRows.length / flightPagination.pageSize) || 1;
+        if (flightPagination.currentPage < totalPages) {
+            flightPagination.currentPage++;
+            updateFlightPagination();
+            scrollToTopFlights();
+        }
+    }
+
+    function changeFlightPageSize(size) {
+        flightPagination.pageSize = parseInt(size, 10) || 8;
+        flightPagination.currentPage = 1;
+        updateFlightPagination();
+    }
+
+    function scrollToTopFlights() {
+        const table = document.getElementById('flights-table');
+        if (table) {
+            table.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+
+    function getFlightPageFromUrl() {
+        const page = Number(new URLSearchParams(window.location.search).get('page') || '1');
+        return Number.isFinite(page) && page > 0 ? page : 1;
+    }
+
+    function syncFlightReturnPage(formId) {
+        const field = document.getElementById(formId + '-return-page');
+        if (field) {
+            field.value = flightPagination.currentPage;
+        }
+    }
+
+    // --- Active Airports Data for Dynamic Transit Stops ---
+    let activeAirports = [];
+    try {
+        const rawAirports = document.getElementById('active-airports-data')?.textContent;
+        if (rawAirports) activeAirports = JSON.parse(rawAirports);
+    } catch (e) {
+        console.error('Failed to parse airports', e);
+    }
+
+    function getAvailableStopAirports(mode) {
+        const deptId = document.getElementById(mode === 'add' ? 'add-departure-airport' : 'ef-origin')?.value;
+        const arrId = document.getElementById(mode === 'add' ? 'add-arrival-airport' : 'ef-destination')?.value;
+        return activeAirports.filter(a => String(a.Id) !== String(deptId) && String(a.Id) !== String(arrId));
+    }
+
+    function filterStopAirports(mode) {
+        // When origin or destination changes, re-sync stop dropdowns and json
+        syncStopsJson(mode);
+    }
+
+    function addStopRow(mode, stopData = null) {
+        const container = document.getElementById(mode === 'add' ? 'add-stops-container' : 'edit-stops-container');
+        const emptyMsg = document.getElementById(mode === 'add' ? 'add-stops-empty-msg' : 'edit-stops-empty-msg');
+        if (!container) return;
+
+        if (emptyMsg) emptyMsg.classList.add('hidden');
+
+        const rows = container.querySelectorAll('.stop-row');
+        const order = rows.length + 1;
+
+        const availablePorts = getAvailableStopAirports(mode);
+        const selectedAirportId = stopData ? String(stopData.AirportId || stopData.airportId || '') : '';
+
+        let optionsHtml = '<option value="" disabled' + (!selectedAirportId ? ' selected' : '') + '>Select transit stop</option>';
+        availablePorts.forEach(port => {
+            const isSel = String(port.Id) === selectedAirportId ? ' selected' : '';
+            optionsHtml += `<option value="${port.Id}"${isSel}>${port.Code} - ${port.City} (${port.Name})</option>`;
+        });
+
+        const rowDiv = document.createElement('div');
+        rowDiv.className = 'stop-row flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200 shadow-2xs';
+        rowDiv.setAttribute('data-stop-order', order);
+        rowDiv.innerHTML = `
+          <span class="w-5 h-5 rounded-full bg-champagne-100 text-champagne-800 flex items-center justify-center text-[10px] font-bold stop-order-badge shrink-0">${order}</span>
+          <select class="stop-airport flex-1 text-xs rounded-lg border-slate-200 bg-slate-50 focus:border-champagne-500 focus:ring-1 focus:ring-champagne-500" required onchange="syncStops('${mode}')">
+            ${optionsHtml}
+          </select>
+          <input type="hidden" class="stop-order-input" value="${order}" />
+          <button type="button" onclick="removeStopRow(this, '${mode}')" class="text-rose-500 hover:text-rose-700 text-xs font-semibold px-2 py-1 rounded hover:bg-rose-50 transition cursor-pointer" title="Remove stop">
+            ✕
+          </button>
+        `;
+
+        container.appendChild(rowDiv);
+        reindexStops(mode);
+        syncStops(mode);
+    }
+
+    function removeStopRow(btn, mode) {
+        const row = btn.closest('.stop-row');
+        if (row) {
+            row.remove();
+            reindexStops(mode);
+            syncStops(mode);
+        }
+    }
+
+    function reindexStops(mode) {
+        const container = document.getElementById(mode === 'add' ? 'add-stops-container' : 'edit-stops-container');
+        const emptyMsg = document.getElementById(mode === 'add' ? 'add-stops-empty-msg' : 'edit-stops-empty-msg');
+        if (!container) return;
+
+        const rows = container.querySelectorAll('.stop-row');
+        if (rows.length === 0 && emptyMsg) {
+            emptyMsg.classList.remove('hidden');
+        }
+
+        rows.forEach((row, index) => {
+            const order = index + 1;
+            row.setAttribute('data-stop-order', order);
+            const badge = row.querySelector('.stop-order-badge');
+            if (badge) badge.textContent = order;
+
+            const airportSelect = row.querySelector('.stop-airport');
+            if (airportSelect) {
+                airportSelect.name = `Stops[${index}].AirportId`;
+            }
+
+            let orderInput = row.querySelector('.stop-order-input');
+            if (!orderInput) {
+                orderInput = document.createElement('input');
+                orderInput.type = 'hidden';
+                orderInput.className = 'stop-order-input';
+                row.appendChild(orderInput);
+            }
+            orderInput.name = `Stops[${index}].StopOrder`;
+            orderInput.value = order;
+        });
+    }
+
+    function syncStops(mode) {
+        const container = document.getElementById(mode === 'add' ? 'add-stops-container' : 'edit-stops-container');
+        const badge = document.getElementById(mode === 'add' ? 'add-stops-count-badge' : 'edit-stops-count-badge');
+        if (!container) return;
+
+        reindexStops(mode);
+
+        const stopCount = container.querySelectorAll('.stop-row .stop-airport').length;
+
+        if (badge) {
+            if (stopCount === 0) {
+                badge.textContent = 'Direct (0 Stops)';
+                badge.className = 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700';
+            } else {
+                badge.textContent = stopCount === 1 ? '1 Transit Stop' : `${stopCount} Transit Stops`;
+                badge.className = 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300';
+            }
+        }
+    }
+
+    const syncStopsJson = syncStops; // kept as alias for backward compatibility
+
+    function openAddFlightModal() {
+        const form = document.getElementById('form-add-flight');
+        if (form) {
+            form.reset();
+            syncFlightReturnPage('add-flight');
+            // Default departure to 2 hours from now, arrival 6 hours from now
+            const now = new Date();
+            const dept = new Date(now.getTime() + (2 * 60 * 60 * 1000));
+            const arr = new Date(now.getTime() + (6 * 60 * 60 * 1000));
+
+            const formatForInput = (d) => {
+                const pad = (n) => String(n).padStart(2, '0');
+                return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+            };
+
+            const deptInput = document.getElementById('add-dept-time');
+            const arrInput = document.getElementById('add-arr-time');
+            if (deptInput && !deptInput.value) deptInput.value = formatForInput(dept);
+            if (arrInput && !arrInput.value) arrInput.value = formatForInput(arr);
+
+            // Reset stops in add modal
+            const addContainer = document.getElementById('add-stops-container');
+            if (addContainer) {
+                addContainer.querySelectorAll('.stop-row').forEach(r => r.remove());
+                reindexStops('add');
+                syncStopsJson('add');
+            }
+        }
+        openModal('modal-add-flight');
+    }
+
+    function handleEditFlightClick(btn) {
+        const id = btn.getAttribute('data-id');
+        const flightNo = btn.getAttribute('data-flightno');
+        const aircraftId = btn.getAttribute('data-aircraft-id');
+        const deptId = btn.getAttribute('data-dept-id');
+        const arrId = btn.getAttribute('data-arr-id');
+        const deptTime = btn.getAttribute('data-dept-time');
+        const arrTime = btn.getAttribute('data-arr-time');
+        const price = btn.getAttribute('data-price');
+        const economyPrice = btn.getAttribute('data-economy-price');
+        const businessPrice = btn.getAttribute('data-business-price');
+        const firstPrice = btn.getAttribute('data-first-price');
+        const status = btn.getAttribute('data-status');
+
+        const efId = document.getElementById('ef-id');
+        const efFlightNo = document.getElementById('ef-flightno');
+        const efAircraft = document.getElementById('ef-aircraft');
+        const efOrigin = document.getElementById('ef-origin');
+        const efDestination = document.getElementById('ef-destination');
+        const efDeptTime = document.getElementById('ef-dept-time');
+        const efArrTime = document.getElementById('ef-arr-time');
+        const efFare = document.getElementById('ef-fare');
+        const efEconomyFare = document.getElementById('ef-economy-fare');
+        const efBusinessFare = document.getElementById('ef-business-fare');
+        const efFirstFare = document.getElementById('ef-firstclass-fare');
+        const efStatus = document.getElementById('ef-status');
+
+        if (efId) efId.value = id || '';
+        if (efFlightNo) efFlightNo.value = flightNo || '';
+        if (efAircraft) efAircraft.value = aircraftId || '';
+        if (efOrigin) efOrigin.value = deptId || '';
+        if (efDestination) efDestination.value = arrId || '';
+        if (efDeptTime) efDeptTime.value = deptTime || '';
+        if (efArrTime) efArrTime.value = arrTime || '';
+        if (efFare) efFare.value = price || '';
+        if (efEconomyFare) efEconomyFare.value = economyPrice || price || '';
+        if (efBusinessFare) efBusinessFare.value = businessPrice || '';
+        if (efFirstFare) efFirstFare.value = firstPrice || '';
+        if (efStatus) efStatus.value = status || '1';
+        syncFlightReturnPage('edit-flight');
+
+        // Populate stops in edit modal
+        const editContainer = document.getElementById('edit-stops-container');
+        if (editContainer) {
+            editContainer.querySelectorAll('.stop-row').forEach(r => r.remove());
+            let stops = [];
+            try {
+                const stopsAttr = btn.getAttribute('data-stops');
+                if (stopsAttr) stops = JSON.parse(stopsAttr);
+            } catch (e) {
+                console.error('Error parsing stops', e);
+            }
+
+            if (stops && stops.length > 0) {
+                stops.forEach(st => addStopRow('edit', st));
+            } else {
+                reindexStops('edit');
+                syncStopsJson('edit');
+            }
+        }
+
+        openModal('modal-edit-flight');
+    }
+
+    function openDeleteFlightModal(id, flightNo) {
+        const idInput = document.getElementById('delete-flight-id');
+        const label = document.getElementById('delete-flight-number');
+        if (idInput) idInput.value = id;
+        if (label) label.textContent = flightNo;
+        syncFlightReturnPage('delete-flight');
+        openModal('modal-delete-flight');
+    }
+
+    function filterFlights(query) {
+        const q = (query || '').toLowerCase().trim();
+        const rows = Array.from(document.querySelectorAll('.flight-row'));
+        const noResults = document.getElementById('no-search-results');
+
+        flightPagination.matchingRows = rows.filter(row => {
+            const searchData = row.getAttribute('data-search') || '';
+            const statusData = row.getAttribute('data-status') || '';
+
+            const matchesQuery = !q || searchData.includes(q);
+            const matchesFilter = activeFilter === 'ALL' || 
+                                  (activeFilter === 'Departed' && (statusData === 'Departed' || statusData === 'Boarding')) ||
+                                  statusData === activeFilter;
+
+            return matchesQuery && matchesFilter;
+        });
+
+        if (noResults) {
+            noResults.classList.toggle('hidden', flightPagination.matchingRows.length > 0 || rows.length === 0);
+        }
+
+        if (q) {
+            flightPagination.currentPage = 1;
+        } else {
+            flightPagination.currentPage = getFlightPageFromUrl();
+        }
+
+        updateFlightPagination();
+    }
+
+    function setFlightFilter(filter, button) {
+        activeFilter = filter;
+        document.querySelectorAll('.flight-filter-pill').forEach(btn => {
+            btn.classList.remove('bg-midnight-800', 'text-white');
+            btn.classList.add('bg-slate-100', 'text-slate-700');
+        });
+        if (button) {
+            button.classList.remove('bg-slate-100', 'text-slate-700');
+            button.classList.add('bg-midnight-800', 'text-white');
+        }
+
+        const searchInput = document.getElementById('flights-search');
+        filterFlights(searchInput ? searchInput.value : '');
+    }
+
+    function openModal(id) {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('hidden');
+    }
+
+    function closeModal(id) {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+        flightPagination.currentPage = getFlightPageFromUrl();
+        const searchInput = document.getElementById('flights-search');
+        filterFlights(searchInput ? searchInput.value : '');
+    });
+</script>
+}

@@ -1,0 +1,707 @@
+@model IEnumerable<SkyBook.Business.ViewModels.BookingDetailsVm>
+@{
+    ViewData["Title"] = "Bookings";
+    Layout = "_AdminLayout";
+}
+@Html.AntiForgeryToken()
+
+<!-- Standard MVC Form for Toggle Booking Status -->
+<form id="form-toggle-booking-status" method="post" asp-area="Admin" asp-controller="AdminBooking" asp-action="ToggleStatus" class="hidden">
+  @Html.AntiForgeryToken()
+  <input type="hidden" name="id" id="toggle-booking-status-id" value="" />
+</form>
+
+<!-- Top header strip -->
+<header class="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between z-20 flex-shrink-0">
+  <div>
+    <h1 class="text-sm font-bold text-midnight-900">Bookings</h1>
+    <p class="text-[11px] text-slate-500">SkyBook Operations Console</p>
+  </div>
+  <a href="@Url.Action("Index", "AdminDashboard", new { area = "Admin" })" class="text-xs font-semibold text-champagne-600 hover:underline">← Full Dashboard</a>
+</header>
+
+<main class="flex-1 overflow-y-auto p-6 bg-[#F8FAFC]" id="viewport-root">
+  <section class="view-container space-y-6 active" data-purpose="bookings-management" id="view-bookings">
+    
+    <!-- Controls -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200">
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="relative w-72">
+          <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+          <input class="w-full text-xs bg-slate-50 rounded-lg pl-9 pr-3 py-2 border border-slate-200 focus:outline-none" id="bookings-search-input" oninput="filterBookingsTable(this.value)" placeholder="Search PNR reference or passenger..." type="text">
+        </div>
+        <select class="text-xs bg-slate-50 rounded-lg px-3 py-2 border border-slate-200 text-slate-700" id="booking-status-filter" onchange="filterBookingsByStatus(this.value)">
+          <option value="ALL">All Statuses</option>
+          <option value="Confirmed">Confirmed Only</option>
+          <option value="Pending">Pending Payment</option>
+          <option value="Cancelled">Cancelled</option>
+        </select>
+      </div>
+      <button class="px-3 py-2 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors flex items-center space-x-1.5 self-start sm:self-auto" onclick="exportBookingsCsv()">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+        <span>Export CSV</span>
+      </button>
+    </div>
+
+    <!-- Data Table -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs text-slate-600">
+          <thead class="bg-slate-50/80 text-[11px] uppercase tracking-wider text-slate-400 font-semibold border-b border-slate-100">
+            <tr><th class="py-3 px-4">Booking Ref</th><th class="py-3 px-4">Customer</th><th class="py-3 px-4">Flight</th><th class="py-3 px-4">Travel Date</th><th class="py-3 px-4">Total Price</th><th class="py-3 px-4">Status</th><th class="py-3 px-4 text-right">Actions</th></tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 font-medium" id="all-bookings-body"></tbody>
+        </table>
+      </div>
+
+      <!-- Bookings Pagination Footer -->
+      <div id="bookings-pagination" class="border-t border-slate-100 px-5 py-3 bg-slate-50/50 flex items-center justify-center">
+        <nav id="bookings-pagination-nav" class="flex items-center gap-1.5" aria-label="Bookings pagination">
+          <button type="button" id="bookings-prev-btn" onclick="prevBookingPage()" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-white hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            <span>Previous</span>
+          </button>
+          <div id="bookings-page-numbers" class="flex items-center gap-1"></div>
+          <button type="button" id="bookings-next-btn" onclick="nextBookingPage()" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-white hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs">
+            <span>Next</span>
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          </button>
+        </nav>
+      </div>
+
+    </div>
+  </section>
+</main>
+
+@* Booking Details Drawer *@
+<div class="fixed inset-0 z-40 overflow-hidden hidden" data-purpose="booking-drawer" id="drawer-booking-details">
+  <div class="drawer-backdrop absolute inset-0 bg-midnight-900/60 backdrop-blur-xs transition-opacity duration-200 opacity-0" onclick="closeDrawer('drawer-booking-details')"></div>
+  <div class="fixed inset-y-0 right-0 max-w-full flex pl-10">
+    <div class="drawer-content w-screen max-w-md bg-white shadow-2xl flex flex-col transition-transform duration-300 translate-x-full">
+      
+      <!-- Header -->
+      <div class="h-16 px-6 bg-midnight-800 text-white flex items-center justify-between border-b border-midnight-700">
+        <span class="text-xs font-semibold uppercase tracking-wider text-champagne-400">Booking Dossier</span>
+        <button class="text-slate-400 hover:text-white p-1" onclick="closeDrawer('drawer-booking-details')">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+        </button>
+      </div>
+      
+      <!-- Content -->
+      <div class="p-6 overflow-y-auto flex-1 space-y-6 text-xs text-slate-600">
+        <div class="flex items-center justify-between border-b border-slate-200 pb-4">
+          <div>
+            <span class="text-[10px] uppercase text-slate-400 font-semibold block">Booking Reference</span>
+            <h2 class="text-2xl font-extrabold font-mono text-midnight-900" id="bd-pnr">--</h2>
+          </div>
+          <div id="bd-status"></div>
+        </div>
+
+        <div>
+          <span class="text-[10px] uppercase text-slate-400 font-semibold block mb-2">Customer Account</span>
+          <div class="flex items-center space-x-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+            <div id="bd-avatar-container" class="shrink-0">
+              <div class="w-12 h-12 rounded-full bg-midnight-900 text-champagne-400 font-bold text-base flex items-center justify-center border-2 border-champagne-500/50" id="bd-initials">--</div>
+            </div>
+            <div>
+              <h3 class="text-base font-bold text-midnight-900" id="bd-name">--</h3>
+              <p class="text-[11px] font-medium text-slate-500 mt-0.5" id="bd-email">--</p>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-[10px] uppercase text-slate-400 font-semibold block">Passengers Manifest</span>
+            <span id="bd-passenger-count" class="text-[10px] font-bold text-champagne-700 bg-champagne-50 px-2.5 py-0.5 rounded-full border border-champagne-200/60">0 Travelers</span>
+          </div>
+          <div id="bd-passengers-container" class="space-y-2"></div>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+            <div class="bg-slate-50 px-4 py-3 border-b border-slate-200">
+                <span class="text-[10px] uppercase text-slate-400 font-semibold">Itinerary Details</span>
+            </div>
+            <div class="p-4 space-y-4" id="bd-itinerary-container"></div>
+        </div>
+
+        <div class="flex justify-between items-center p-4 bg-slate-50 rounded-xl border border-slate-200">
+            <span class="font-semibold text-slate-600">Total Fare</span>
+            <span class="text-lg font-extrabold font-mono text-midnight-900" id="bd-price">--</span>
+        </div>
+      </div>
+      
+      <!-- Footer Actions -->
+      <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
+        <button class="px-3 py-2 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors" id="bd-cancel-btn">Cancel Booking</button>
+        <button class="px-4 py-2 text-xs font-semibold text-white bg-midnight-800 hover:bg-midnight-900 rounded-lg transition-colors" onclick="closeDrawer('drawer-booking-details')">Close Dossier</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+@* Hidden Cancellation / Restore Modal *@
+<div class="fixed inset-0 z-50 overflow-hidden hidden" id="modal-confirm-cancel">
+  <div class="absolute inset-0 bg-midnight-900/60 backdrop-blur-xs" onclick="closeModal('modal-confirm-cancel')"></div>
+  <div class="flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm relative z-10">
+      <div class="flex items-center space-x-3 mb-3">
+        <div id="cancel-modal-icon" class="w-10 h-10 rounded-full flex items-center justify-center text-rose-600 bg-rose-50 border border-rose-200">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
+        </div>
+        <div>
+          <h3 class="text-base font-bold text-midnight-900" id="cancel-modal-title">Cancel Booking?</h3>
+          <p class="text-[11px] text-slate-400 font-mono" id="cancel-modal-pnr">SKY-XXXXX</p>
+        </div>
+      </div>
+      <p class="text-xs text-slate-500 mb-6 leading-relaxed" id="cancel-modal-desc">Are you sure you want to cancel this booking? This will release the seat assignment.</p>
+      <div class="flex space-x-3">
+        <button onclick="closeModal('modal-confirm-cancel')" class="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors">Keep It</button>
+        <button onclick="executeServerToggle()" class="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-lg transition-colors shadow-sm" id="cancel-modal-btn-confirm">Yes, Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+@* Toast Notification Container *@
+<div id="toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col space-y-3 pointer-events-none"></div>
+
+@section Scripts {
+<script data-purpose="application-logic">
+    const serverBookings = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model, new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
+
+    const state = {
+      sidebarCollapsed: false,
+      cancellationTarget: null,
+      currentPage: 1,
+      pageSize: 10,
+      searchQuery: '',
+      statusFilter: 'ALL',
+      bookings: (serverBookings || []).map(b => {
+        // Customer in table is strictly the User account who made the reservation
+        const userDisplayName = b.userFullName || b.userName || b.passengerName || 'Customer';
+        return {
+          ...b,
+          userImageUrl: b.userImageUrl || '',
+          pnr: b.bookingReference || '-',
+          customerName: userDisplayName,
+          initials: getInitialsFromName(userDisplayName),
+          userEmail: b.userEmail || '',
+          tier: '',
+          flightCode: b.flightNumber || '-',
+          routeSummary: (b.departureAirPort && b.arrivalAirPort) ? `${b.departureAirPort} → ${b.arrivalAirPort}` : '-',
+          travelDate: b.bookingDate ? new Date(b.bookingDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-',
+          seat: b.seatNumber || '-',
+          price: b.totalPrice != null ? `£${parseFloat(b.totalPrice).toFixed(2)}` : '-',
+          status: b.status != null ? getStatusText(b.status) : 'Confirmed',
+          id: b.bookingId,
+          passengers: b.passengers || [],
+          segments: b.segments || []
+        };
+      })
+    };
+
+    function getInitialsFromName(name) {
+      if (!name) return '??';
+      const parts = name.trim().split(/\s+/);
+      if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+
+    function getStatusText(status) {
+      if (status === null || status === undefined) return 'Confirmed';
+      
+      if (typeof status === 'number') {
+        switch(status) {
+          case 1: return 'Pending';
+          case 2: return 'Confirmed';
+          case 3: return 'Cancelled';
+          case 0: return 'Confirmed';
+          default: return 'Confirmed';
+        }
+      }
+      
+      const s = String(status).trim().toLowerCase();
+      if (s === '1' || s === 'pending') return 'Pending';
+      if (s === '2' || s === 'confirmed' || s === '0') return 'Confirmed';
+      if (s === '3' || s === 'cancelled' || s === 'canceled') return 'Cancelled';
+      if (s === 'unknown') return 'Confirmed';
+      
+      return status.charAt(0).toUpperCase() + status.slice(1);
+    }
+
+    function getStatusBadge(status) {
+      const s = getStatusText(status);
+      if (s === 'Confirmed') {
+        return `<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>Confirmed</span>`;
+      }
+      if (s === 'Pending') {
+        return `<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200/60"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>Pending</span>`;
+      }
+      return `<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200/60"><span class="w-1.5 h-1.5 rounded-full bg-rose-500 mr-1.5"></span>Cancelled</span>`;
+    }
+
+    function getCustomerAvatarHtml(b, sizeClass = 'w-7 h-7', textSize = 'text-[10px]') {
+      const initials = b.initials || '??';
+      const safeName = (b.customerName || '').replace(/"/g, '&quot;');
+      if (b.userImageUrl) {
+        return `<img src="${b.userImageUrl}" alt="${safeName}" class="${sizeClass} rounded-full object-cover border border-champagne-500/50 shrink-0 shadow-2xs" onerror="this.outerHTML='<div class=\\'${sizeClass} rounded-full bg-champagne-100 text-champagne-800 ${textSize} font-bold flex items-center justify-center shrink-0\\'>${initials}</div>'"/>`;
+      }
+      return `<div class="${sizeClass} rounded-full bg-champagne-100 text-champagne-800 ${textSize} font-bold flex items-center justify-center shrink-0">${initials}</div>`;
+    }
+
+    function getFilteredBookings() {
+      let list = state.bookings;
+      if (state.statusFilter !== 'ALL') {
+        list = list.filter(b => b.status === state.statusFilter);
+      }
+      if (state.searchQuery) {
+        const q = state.searchQuery.toLowerCase();
+        list = list.filter(b => 
+          (b.pnr && b.pnr.toLowerCase().includes(q)) || 
+          (b.customerName && b.customerName.toLowerCase().includes(q)) || 
+          (b.flightCode && b.flightCode.toLowerCase().includes(q))
+        );
+      }
+      return list;
+    }
+
+    // Render Table using server data with pagination
+    function renderBookingsTable() {
+      const container = document.getElementById('all-bookings-body');
+      if (!container) return;
+
+      const list = getFilteredBookings();
+      const total = list.length;
+      const totalPages = Math.ceil(total / state.pageSize) || 1;
+      if (state.currentPage > totalPages) state.currentPage = totalPages;
+      if (state.currentPage < 1) state.currentPage = 1;
+
+      const startIndex = (state.currentPage - 1) * state.pageSize;
+      const endIndex = startIndex + state.pageSize;
+      const pageSlice = list.slice(startIndex, endIndex);
+
+      const paginationBar = document.getElementById('bookings-pagination');
+      if (paginationBar) {
+        paginationBar.classList.toggle('hidden', total === 0);
+      }
+
+      const prevBtn = document.getElementById('bookings-prev-btn');
+      const nextBtn = document.getElementById('bookings-next-btn');
+      if (prevBtn) prevBtn.disabled = (state.currentPage <= 1);
+      if (nextBtn) nextBtn.disabled = (state.currentPage >= totalPages);
+
+      renderBookingPageNumbers(totalPages, state.currentPage);
+
+      if (pageSlice.length === 0) {
+        container.innerHTML = `
+          <tr>
+            <td colspan="7" class="py-12 text-center text-slate-400">
+              <p class="font-semibold text-slate-600 text-xs">No bookings found</p>
+            </td>
+          </tr>`;
+        return;
+      }
+
+      container.innerHTML = pageSlice.map(b => {
+        const isCancelled = (b.status === 'Cancelled');
+        return `
+        <tr class="hover:bg-slate-50/70 transition-colors">
+          <td class="py-3 px-4 font-mono font-bold text-midnight-900">${b.pnr}</td>
+          <td class="py-3 px-4">
+            <div class="flex items-center space-x-2.5">
+              ${getCustomerAvatarHtml(b, 'w-7 h-7', 'text-[10px]')}
+              <div><span class="block font-semibold text-slate-800">${b.customerName}</span></div>
+            </div>
+          </td>
+          <td class="py-3 px-4 font-mono text-slate-700"><span class="font-semibold text-midnight-900">${b.flightCode}</span><span class="text-[10px] text-slate-400 ml-1">(${b.routeSummary})</span></td>
+          <td class="py-3 px-4 text-slate-600">${b.travelDate}</td>
+          <td class="py-3 px-4 font-mono font-bold text-slate-900">${b.price}</td>
+          <td class="py-3 px-4">${getStatusBadge(b.status)}</td>
+          <td class="py-3 px-4 text-right">
+            <div class="inline-flex items-center justify-end space-x-2">
+              <button onclick="openBookingDetailsDrawer(${b.id})" class="text-xs text-champagne-600 hover:text-champagne-700 font-semibold px-2 py-1 hover:underline">View Details</button>
+              <button type="button" 
+                      onclick="toggleBookingStatus(${b.id}, '${b.pnr}', this)"
+                      title="${isCancelled ? 'Click to Restore Booking (Turn ON)' : 'Click to Cancel Booking (Turn OFF)'}"
+                      class="inline-flex items-center space-x-2 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all duration-200 border cursor-pointer select-none active:scale-95 ${
+                        isCancelled 
+                          ? 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100 hover:border-rose-300' 
+                          : 'bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100 hover:border-emerald-300'
+                      }">
+                <span class="relative inline-flex items-center h-4 w-7 shrink-0 rounded-full transition-colors duration-200 ${
+                  isCancelled ? 'bg-slate-300' : 'bg-emerald-500'
+                }">
+                  <span class="inline-block h-3 w-3 transform rounded-full bg-white shadow-xs transition-transform duration-200 ${
+                    isCancelled ? 'translate-x-0.5' : 'translate-x-3.5'
+                  }"></span>
+                </span>
+                <span class="font-mono text-[10px] uppercase font-bold tracking-wider">${isCancelled ? 'OFF • Cancelled' : 'ON • Active'}</span>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+      }).join('');
+    }
+
+    function renderBookingPageNumbers(totalPages, current) {
+      const container = document.getElementById('bookings-page-numbers');
+      if (!container) return;
+      container.innerHTML = '';
+
+      if (totalPages <= 1) return;
+
+      const pages = [];
+      if (totalPages <= 7) {
+        for (let i = 1; i <= totalPages; i++) pages.push(i);
+      } else {
+        pages.push(1);
+        if (current > 3) pages.push('...');
+        const start = Math.max(2, current - 1);
+        const end = Math.min(totalPages - 1, current + 1);
+        for (let i = start; i <= end; i++) {
+          if (!pages.includes(i)) pages.push(i);
+        }
+        if (current < totalPages - 2) pages.push('...');
+        if (!pages.includes(totalPages)) pages.push(totalPages);
+      }
+
+      pages.forEach(p => {
+        if (p === '...') {
+          const span = document.createElement('span');
+          span.className = 'px-2 py-1 text-slate-400 text-xs font-mono select-none';
+          span.textContent = '...';
+          container.appendChild(span);
+        } else {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.textContent = p;
+          if (p === current) {
+            btn.className = 'w-8 h-8 rounded-lg bg-midnight-900 text-white font-bold text-xs shadow-xs border border-midnight-950 flex items-center justify-center';
+          } else {
+            btn.className = 'w-8 h-8 rounded-lg bg-white hover:bg-slate-100 text-slate-700 font-semibold text-xs border border-slate-200 hover:border-slate-300 transition flex items-center justify-center';
+            btn.onclick = () => goToBookingPage(p);
+          }
+          container.appendChild(btn);
+        }
+      });
+    }
+
+    function goToBookingPage(page) {
+      state.currentPage = page;
+      renderBookingsTable();
+      scrollToTopBookings();
+    }
+
+    function prevBookingPage() {
+      if (state.currentPage > 1) {
+        state.currentPage--;
+        renderBookingsTable();
+        scrollToTopBookings();
+      }
+    }
+
+    function nextBookingPage() {
+      const totalPages = Math.ceil(getFilteredBookings().length / state.pageSize) || 1;
+      if (state.currentPage < totalPages) {
+        state.currentPage++;
+        renderBookingsTable();
+        scrollToTopBookings();
+      }
+    }
+
+    function changeBookingPageSize(size) {
+      state.pageSize = parseInt(size, 10) || 10;
+      state.currentPage = 1;
+      renderBookingsTable();
+    }
+
+    function scrollToTopBookings() {
+      const el = document.getElementById('view-bookings');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // Filtering Functions
+    function filterBookingsTable(query) {
+      state.searchQuery = query || '';
+      state.currentPage = 1;
+      renderBookingsTable();
+    }
+
+    function filterBookingsByStatus(status) {
+      state.statusFilter = status || 'ALL';
+      state.currentPage = 1;
+      renderBookingsTable();
+    }
+
+    // Modal & Drawer Utilities
+    function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+    function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+    
+    function openDrawer(id) {
+      const d = document.getElementById(id);
+      if (!d) return;
+      d.classList.remove('hidden');
+      setTimeout(() => {
+        const b = d.querySelector('.drawer-backdrop');
+        const c = d.querySelector('.drawer-content');
+        if(b) b.classList.remove('opacity-0');
+        if(c) c.classList.remove('translate-x-full');
+      }, 10);
+    }
+    
+    function closeDrawer(id) {
+      const d = document.getElementById(id);
+      if (!d) return;
+      const b = d.querySelector('.drawer-backdrop');
+      const c = d.querySelector('.drawer-content');
+      if(b) b.classList.add('opacity-0');
+      if(c) c.classList.add('translate-x-full');
+      setTimeout(() => d.classList.add('hidden'), 250);
+    }
+
+    // Open specific booking drawer
+    function openBookingDetailsDrawer(bookingId) {
+      const booking = state.bookings.find(b => b.id === bookingId);
+      if (!booking) return;
+
+      document.getElementById('bd-pnr').innerText = booking.pnr;
+      document.getElementById('bd-status').innerHTML = getStatusBadge(booking.status);
+      
+      const avatarContainer = document.getElementById('bd-avatar-container');
+      if (avatarContainer) {
+        const safeName = (booking.customerName || '').replace(/"/g, '&quot;');
+        if (booking.userImageUrl) {
+          avatarContainer.innerHTML = `<img src="${booking.userImageUrl}" alt="${safeName}" class="w-12 h-12 rounded-full object-cover border-2 border-champagne-500/50 shadow-xs shrink-0" onerror="this.outerHTML='<div class=\\'w-12 h-12 rounded-full bg-midnight-900 text-champagne-400 font-bold text-base flex items-center justify-center border-2 border-champagne-500/50 shrink-0\\' id=\\'bd-initials\\'>${booking.initials}</div>'"/>`;
+        } else {
+          avatarContainer.innerHTML = `<div class="w-12 h-12 rounded-full bg-midnight-900 text-champagne-400 font-bold text-base flex items-center justify-center border-2 border-champagne-500/50 shrink-0" id="bd-initials">${booking.initials}</div>`;
+        }
+      } else {
+        const initEl = document.getElementById('bd-initials');
+        if (initEl) initEl.innerText = booking.initials;
+      }
+
+      document.getElementById('bd-name').innerText = booking.customerName;
+      const emailEl = document.getElementById('bd-email');
+      if (emailEl) emailEl.innerText = booking.userEmail || 'Registered Customer';
+      
+      const itineraryContainer = document.getElementById('bd-itinerary-container');
+      const itinerarySegments = booking.segments.length > 0
+        ? booking.segments
+        : [{
+            flightNumber: booking.flightCode,
+            departureAirport: booking.departureAirPort,
+            arrivalAirport: booking.arrivalAirPort,
+            departureTime: booking.bookingDate,
+            seatNumbers: booking.seat
+          }];
+
+      if (itineraryContainer) {
+        itineraryContainer.innerHTML = itinerarySegments.map((segment, index) => {
+          const travelDate = segment.departureTime
+            ? new Date(segment.departureTime).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+            : '-';
+          const route = (segment.departureAirport && segment.arrivalAirport)
+            ? `${segment.departureAirport} to ${segment.arrivalAirport}`
+            : '-';
+          const divider = index > 0 ? 'border-t border-slate-200 pt-4' : '';
+
+          return `
+            <div class="space-y-3 ${divider}">
+              ${itinerarySegments.length > 1 ? `<span class="text-[10px] uppercase tracking-wider text-champagne-700 font-bold">Flight ${index + 1} of ${itinerarySegments.length}</span>` : ''}
+              <div class="flex justify-between items-center gap-4">
+                <div>
+                  <span class="text-[10px] uppercase text-slate-400 font-semibold block">Flight</span>
+                  <span class="font-bold text-midnight-900 text-sm">${segment.flightNumber || '-'}</span>
+                </div>
+                <div class="text-right min-w-0">
+                  <span class="text-[10px] uppercase text-slate-400 font-semibold block">Route</span>
+                  <span class="font-bold text-midnight-900 text-sm block">${route}</span>
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-4 pt-3 border-t border-slate-100">
+                <div>
+                  <span class="text-[10px] uppercase text-slate-400 font-semibold block">Travel Date</span>
+                  <span class="font-semibold text-slate-800">${travelDate}</span>
+                </div>
+                <div>
+                  <span class="text-[10px] uppercase text-slate-400 font-semibold block">Seat / Cabin</span>
+                  <span class="font-mono text-slate-800 font-semibold">${segment.seatNumbers || '-'}</span>
+                </div>
+              </div>
+            </div>`;
+        }).join('');
+      }
+      document.getElementById('bd-price').innerText = booking.price;
+
+      // Populate Passengers Manifest (All passengers in this reservation)
+      const paxContainer = document.getElementById('bd-passengers-container');
+      const paxCountEl = document.getElementById('bd-passenger-count');
+      const paxList = (booking.passengers && booking.passengers.length > 0) 
+        ? booking.passengers 
+        : [{ fullName: booking.passengerName || booking.customerName, seatNumber: booking.seat, passportNumber: '-', nationality: 'Confirmed' }];
+
+      if (paxCountEl) paxCountEl.innerText = `${paxList.length} ${paxList.length === 1 ? 'Traveler' : 'Travelers'}`;
+
+      if (paxContainer) {
+        paxContainer.innerHTML = paxList.map((p, idx) => `
+          <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between gap-3 shadow-2xs">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-midnight-900 text-champagne-400 font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs">
+                ${getInitialsFromName(p.fullName || p.name || 'P')}
+              </div>
+              <div>
+                <p class="font-bold text-midnight-900 text-xs">${p.fullName || p.name || 'Passenger'}</p>
+                <p class="text-[10px] text-slate-500">
+                  <span class="font-semibold text-champagne-700">${idx === 0 ? 'Primary Passenger' : 'Passenger ' + (idx + 1)}</span>
+                  ${p.nationality ? ' • ' + p.nationality : ''}
+                  ${p.passportNumber && p.passportNumber !== '-' ? ` • <span class="font-mono text-slate-400">${p.passportNumber}</span>` : ''}
+                </p>
+              </div>
+            </div>
+            <div class="text-right shrink-0">
+              <span class="text-[9px] uppercase font-bold text-slate-400 block">Seat</span>
+              <span class="font-mono font-bold text-xs px-2 py-0.5 rounded bg-white border border-slate-200 text-midnight-900">${p.seatNumber || '-'}</span>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      const isCancelled = (booking.status === 'Cancelled');
+      const cancelBtn = document.getElementById('bd-cancel-btn');
+      if (cancelBtn) {
+        cancelBtn.innerHTML = `
+          <span class="relative inline-flex items-center h-4 w-7 shrink-0 rounded-full mr-2 transition-colors duration-200 ${isCancelled ? 'bg-slate-300' : 'bg-emerald-500'}">
+            <span class="inline-block h-3 w-3 transform rounded-full bg-white shadow-xs transition-transform duration-200 ${isCancelled ? 'translate-x-0.5' : 'translate-x-3.5'}"></span>
+          </span>
+          <span>${isCancelled ? 'Turn ON (Restore Booking)' : 'Turn OFF (Cancel Booking)'}</span>
+        `;
+        cancelBtn.className = `px-3 py-2 text-xs font-semibold rounded-lg transition-colors inline-flex items-center cursor-pointer ${
+          isCancelled 
+            ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200' 
+            : 'text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200/60'
+        }`;
+        cancelBtn.onclick = () => { 
+          toggleBookingStatus(booking.id, booking.pnr, cancelBtn); 
+        };
+      }
+
+      openDrawer('drawer-booking-details');
+    }
+
+    // Direct Toggle Status Function with standard MVC form submission
+    function toggleBookingStatus(id, pnr, btnElement) {
+      if (!id) return;
+
+      if (btnElement) {
+        btnElement.disabled = true;
+        btnElement.style.opacity = '0.6';
+        btnElement.style.pointerEvents = 'none';
+      }
+
+      const form = document.getElementById('form-toggle-booking-status');
+      const idInput = document.getElementById('toggle-booking-status-id');
+      if (form && idInput) {
+        idInput.value = id;
+        form.submit();
+      }
+    }
+
+    // Modal Confirmation Workflow (Optional / Alternative)
+    function promptToggleStatus(id, pnr, currentStatus) {
+      const isCancelled = (currentStatus === 'Cancelled');
+      state.cancellationTarget = { id, pnr, isCancelled };
+
+      const titleEl = document.getElementById('cancel-modal-title');
+      const pnrEl = document.getElementById('cancel-modal-pnr');
+      const descEl = document.getElementById('cancel-modal-desc');
+      const confirmBtn = document.getElementById('cancel-modal-btn-confirm');
+      const iconEl = document.getElementById('cancel-modal-icon');
+
+      if (pnrEl) pnrEl.innerText = pnr;
+
+      if (isCancelled) {
+        if (titleEl) titleEl.innerText = 'Restore Booking to Active?';
+        if (descEl) descEl.innerText = `This will reactivate booking ${pnr} and set its status to Confirmed.`;
+        if (confirmBtn) {
+          confirmBtn.innerText = 'Turn ON (Restore)';
+          confirmBtn.className = 'flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors shadow-sm cursor-pointer';
+        }
+        if (iconEl) {
+          iconEl.className = 'w-10 h-10 rounded-full flex items-center justify-center text-emerald-600 bg-emerald-50 border border-emerald-200';
+          iconEl.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>';
+        }
+      } else {
+        if (titleEl) titleEl.innerText = 'Cancel this Booking?';
+        if (descEl) descEl.innerText = `This will cancel booking ${pnr} and release the assigned seat.`;
+        if (confirmBtn) {
+          confirmBtn.innerText = 'Turn OFF (Cancel)';
+          confirmBtn.className = 'flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-lg transition-colors shadow-sm cursor-pointer';
+        }
+        if (iconEl) {
+          iconEl.className = 'w-10 h-10 rounded-full flex items-center justify-center text-rose-600 bg-rose-50 border border-rose-200';
+          iconEl.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>';
+        }
+      }
+
+      openModal('modal-confirm-cancel');
+    }
+
+    function executeServerToggle() {
+      if (!state.cancellationTarget) return;
+      const { id, pnr } = state.cancellationTarget;
+      closeModal('modal-confirm-cancel');
+      toggleBookingStatus(id, pnr);
+    }
+
+    function exportBookingsCsv() {
+      const headers = ['Booking Ref', 'Customer', 'Flight', 'Route', 'Travel Date', 'Seat', 'Price', 'Status'];
+      const rows = state.bookings.map(b => [
+        `"${b.pnr}"`, `"${b.customerName}"`, `"${b.flightCode}"`, `"${b.routeSummary}"`,
+        `"${b.travelDate}"`, `"${b.seat}"`, `"${b.price}"`, `"${b.status}"`
+      ]);
+      const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement('a');
+      link.setAttribute('href', encodedUri);
+      link.setAttribute('download', `SkyBook_Bookings_${new Date().toISOString().slice(0,10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast('Bookings successfully exported to CSV', 'success');
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      if (!container) return;
+
+      const toast = document.createElement('div');
+      const bgColors = { info: 'bg-midnight-900 text-white', success: 'bg-emerald-800 text-white', error: 'bg-rose-800 text-white' };
+
+      toast.className = `${bgColors[type] || bgColors.info} px-4 py-3 rounded-xl shadow-xl text-xs font-semibold flex items-center space-x-2 transform transition-all duration-300 translate-y-2 opacity-0`;
+      toast.innerHTML = `<span class="w-2 h-2 rounded-full ${type === 'success' ? 'bg-emerald-400' : type === 'error' ? 'bg-rose-400' : 'bg-champagne-400'}"></span><span>${message}</span>`;
+      container.appendChild(toast);
+
+      setTimeout(() => toast.classList.remove('translate-y-2', 'opacity-0'), 10);
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      
+      @if (TempData["Success"] != null)
+      {
+          @:showToast('@TempData["Success"]', 'success');
+      }
+      @if (TempData["Error"] != null)
+      {
+          @:showToast('@TempData["Error"]', 'error');
+      }
+
+      renderBookingsTable();
+    });
+</script>
+}
